@@ -1,0 +1,6 @@
+#define MIGFRA_VERSION @MIGFRA_VERSION@
+
+#cmakedefine LOG_USE_SYSTEMD
+#cmakedefine LOG_USE_SYSLOG
+#cmakedefine LOG_USE_STDOUT
+#cmakedefine LOG_USE_NONE
