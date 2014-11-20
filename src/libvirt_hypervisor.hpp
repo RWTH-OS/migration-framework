@@ -1,0 +1,4 @@
+#ifndef LIBVIRT_HYPERVISOR_HPP
+#define LIBVIRT_HYPERVISOR_HPP
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef LOGGER_HPP
+#define LOGGER_HPP
+
 #include "conf.hpp"
 
 #ifdef LOG_USE_SYSTEMD
@@ -25,3 +28,4 @@
 	#define LOG_PRINT(PRIORITY, STRING) 
 #endif
 
+#endif
