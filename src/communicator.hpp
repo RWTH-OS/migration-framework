@@ -8,6 +8,7 @@ class Communicator
 public:
 	virtual ~Communicator(){};
 	virtual void send_message(const std::string &message) = 0;
+	virtual std::string get_message() = 0;
 };
 
 #endif

@@ -1,5 +1,4 @@
-#include "mqtt_communicator.hpp"
-
+#include "task_handler.hpp"
 #include "logging.hpp"
 #include "conf.hpp"
 
@@ -12,17 +11,10 @@ int main(int argc, char *argv[])
 {
 	getopt(argc, argv, "");
 	try {
-		LOG_PRINT(LOG_NOTICE, "Initializing migfra...");
-		Communicator *comm = new MQTT_communicator("T1", "topic1", "localhost", 1883);
-		LOG_PRINT(LOG_NOTICE, "Migfra initialized.");
-	
-		LOG_PRINT(LOG_NOTICE, "Sending message...");
-		comm->send_message("Hello world.");
-		LOG_PRINT(LOG_NOTICE, "Message sent.");
-	
-		LOG_PRINT(LOG_NOTICE, "Quiting migfra...");
-		delete comm;
-		LOG_PRINT(LOG_NOTICE, "Migfra quit.");
+		Task_handler task_handler;
+		LOG_PRINT(LOG_NOTICE, "task_handler loop started.");
+		task_handler.loop();
+		LOG_PRINT(LOG_NOTICE, "task_handler loop closed.");
 	} catch (const std::exception &e) {
 		LOG_PRINT(LOG_ERR, (std::string("Exception: ") + e.what()).c_str());
 	}
