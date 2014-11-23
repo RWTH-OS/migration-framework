@@ -21,7 +21,7 @@ private:
 	int keepalive;
 	std::mutex empty_mutex;
 	std::mutex msg_queue_mutex;
-	std::queue<mosquitto_message*> messages;
+	std::queue<mosquitto_message*> messages; /// TODO: Consider using unique_ptr.
 
 	void on_connect(int rc);
 	void on_disconnect(int rc);

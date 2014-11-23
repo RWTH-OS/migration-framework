@@ -17,9 +17,7 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	keepalive(60)
 {
 	LOG_PRINT(LOG_NOTICE, "Initializing MQTT_communicator...");
-	/// TODO: Call mutex constructors instead of lock/unlock.
 	empty_mutex.lock();
-	msg_queue_mutex.unlock();
 	mosqpp::lib_init();
 	connect_async(host.c_str(), port, keepalive);
 	loop_start();
@@ -63,13 +61,14 @@ void MQTT_communicator::on_publish(int mid)
 void MQTT_communicator::on_message(const mosquitto_message *msg)
 {
 	LOG_PRINT(LOG_NOTICE, "on_message executed.");
-	msg_queue_mutex.lock();
+	std::lock_guard<std::mutex> lock(msg_queue_mutex);
 	if (messages.empty())
 		empty_mutex.unlock();
-	/// TODO: Add error handling.
-	messages.push((mosquitto_message*)malloc(sizeof(mosquitto_message)));
+	mosquitto_message* buf = static_cast<mosquitto_message*>(malloc(sizeof(mosquitto_message)));
+	if (!buf) 
+		LOG_PRINT(LOG_ERR, "malloc failed allocating mosquitto_message.");
+	messages.push(buf);
 	mosquitto_message_copy(messages.back(), msg);
-	msg_queue_mutex.unlock();
 	LOG_PRINT(LOG_NOTICE, "Message added to queue.");
 }
 
@@ -82,27 +81,18 @@ void MQTT_communicator::send_message(const std::string &message)
 
 std::string MQTT_communicator::get_message()
 {
-	LOG_PRINT(LOG_NOTICE, "Locking empty_mutex");
+	LOG_PRINT(LOG_NOTICE, "Wait for message.");
+	mosquitto_message *msg;
 	empty_mutex.lock();
-	LOG_PRINT(LOG_NOTICE, "Locking msg_queue_mutex");
-	msg_queue_mutex.lock();
-	LOG_PRINT(LOG_NOTICE, "Get first msg.");
-	mosquitto_message *msg = messages.front();
-	LOG_PRINT(LOG_NOTICE, "Pop from queue.");
-	messages.pop();
-	if(!messages.empty())
-		empty_mutex.unlock();
-	msg_queue_mutex.unlock();
-	LOG_PRINT(LOG_NOTICE, (std::string("Topic: ") + msg->topic).c_str());
-	LOG_PRINT(LOG_NOTICE, "Converting payload to string.");
-	/// TODO: Find better c++ style solution to convert payload to string.
-	char* buf = new char[msg->payloadlen+1];
-	buf[msg->payloadlen] = '\0';
-	memcpy(buf, msg->payload, msg->payloadlen);
-	std::string payload(buf);
-	delete[] buf;
-	LOG_PRINT(LOG_NOTICE, "Free msg.");
+	{
+		std::lock_guard<std::mutex> lock(msg_queue_mutex);
+		msg = messages.front();
+		messages.pop();
+		if(!messages.empty())
+			empty_mutex.unlock();
+	}
+	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
 	mosquitto_message_free(&msg);
-	LOG_PRINT(LOG_NOTICE, "Returning payload string.");
-	return payload;
+	LOG_PRINT(LOG_NOTICE, "Message received.");
+	return buf;
 }

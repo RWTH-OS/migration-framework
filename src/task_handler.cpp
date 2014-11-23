@@ -13,10 +13,6 @@ Task_handler::Task_handler() :
 {
 }
 
-Task_handler::~Task_handler()
-{
-	delete comm;
-}
 
 void Task_handler::loop()
 {
