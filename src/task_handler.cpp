@@ -25,7 +25,7 @@ void Task_handler::loop()
 			if (msg == "quit")
 				running = false;
 		} catch (const std::exception &e) {
-			LOG_PRINT(LOG_ERR, (std::string("Exception: ") + e.what()).c_str());
+			LOG_STREAM(LOG_ERR, "Exception: " << e.what());
 		}
 	}
 }

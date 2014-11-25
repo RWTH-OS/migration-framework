@@ -38,24 +38,24 @@ MQTT_communicator::~MQTT_communicator()
 void MQTT_communicator::on_connect(int rc)
 {
 	if (rc == 0) {
-		LOG_PRINT(LOG_NOTICE, ("Connection established to " + host + ":" + std::to_string(port)).c_str());
+		LOG_STREAM(LOG_NOTICE, "Connection established to " << host << ":" << port);
 	} else {
-		LOG_PRINT(LOG_ERR, ("Error on connect: Code " + std::to_string(rc)).c_str());
+		LOG_STREAM(LOG_ERR, "Error on connect: Code " << rc);
 	}
 }
 
 void MQTT_communicator::on_disconnect(int rc)
 {
 	if (rc == 0) {
-		LOG_PRINT(LOG_NOTICE, ("Disconnected from  " + host + ":" + std::to_string(port)).c_str());
+		LOG_STREAM(LOG_NOTICE, "Disconnected from  " << host << ":" << port);
 	} else {
-		LOG_PRINT(LOG_ERR, ("Unexpected disconnect: Code " + std::to_string(rc)).c_str());
+		LOG_STREAM(LOG_ERR, "Unexpected disconnect: Code " << rc);
 	}
 }
 
 void MQTT_communicator::on_publish(int mid)
 {
-	LOG_PRINT(LOG_NOTICE, ("Message " + std::to_string(mid) + " published.").c_str());
+	LOG_STREAM(LOG_NOTICE, "Message " << mid << " published.");
 }
 
 void MQTT_communicator::on_message(const mosquitto_message *msg)

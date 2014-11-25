@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 		task_handler.loop();
 		LOG_PRINT(LOG_NOTICE, "task_handler loop closed.");
 	} catch (const std::exception &e) {
-		LOG_PRINT(LOG_ERR, (std::string("Exception: ") + e.what()).c_str());
+		LOG_STREAM(LOG_ERR, "Exception: " << e.what());
 	}
 	return EXIT_SUCCESS;
 }
