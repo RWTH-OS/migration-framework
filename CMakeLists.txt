@@ -1,14 +1,15 @@
 # TODO: Find yaml-cpp library.
 # TODO: Find libmosquittopp.
 # TODO: Write installation of daemon.
+# TODO: Create automatic documentation generation target.
 
 cmake_minimum_required(VERSION 2.6)
 project(migration-framework)
 
 # Define version number
 set(MIGFRA_VERSION_MAJOR "0")
-set(MIGFRA_VERSION_MINOR "0")
-set(MIGFRA_VERSION_PATCH "1")
+set(MIGFRA_VERSION_MINOR "1")
+set(MIGFRA_VERSION_PATCH "0")
 set(MIGFRA_VERSION "${MIGFRA_VERSION_MAJOR}.${MIGFRA_VERSION_MINOR}.${MIGFRA_VERSION_PATCH}")
 
 # Define logging method (TODO: find installed logging system)
@@ -39,6 +40,13 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
+)
+
+# Doxygen documentation generation
+configure_file(
+	"${PROJECT_SOURCE_DIR}/Doxyfile.in"
+	"${PROJECT_BINARY_DIR}/Doxyfile"
+	@ONLY
 )
 
 # Add conf.hpp to pass CMake settings to src code.
