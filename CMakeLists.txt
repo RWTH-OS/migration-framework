@@ -38,6 +38,7 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/parser.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
+	${PROJECT_SOURCE_DIR}/src/task.cpp
 )
 
 # Add conf.hpp to pass CMake settings to src code.

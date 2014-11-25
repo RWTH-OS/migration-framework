@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "communicator.hpp"
+#include "parser.hpp"
 
 class Task_handler
 {
@@ -12,6 +13,7 @@ public:
 	void loop();
 private:
 	std::unique_ptr<Communicator> comm;
+	Parser parser;
 	bool running;
 };
 
