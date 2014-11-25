@@ -2,13 +2,24 @@
 #define TASK_HPP
 
 #include <string>
-#include <forward_list>
+#include <vector>
+
+/**
+ * \brief Represents the result of the execute method of a Task.
+ */
+struct Result
+{
+	Result(const std::string &title, const std::string &vm_name, const std::string &status);
+	std::string title;
+	std::string vm_name;
+	std::string status;
+};
 
 /**
  * \brief Abstract base class for tasks.
  *
  * Every task has to inherit from this class.
- * Task_handler will call operator() to execute the task.
+ * Task_handler will call execute() to execute the task.
  * TODO: Create Result class to be returned by operator() of tasks.
  */
 class Task
@@ -23,8 +34,9 @@ public:
 	 * \brief Execute the task.
 	 *
 	 * Pure virtual so every derived task has to implement this method.
+	 * \return Return type is a vector because in packed mode multiple tasks return results.
 	 */
-	virtual void operator()() = 0;
+	virtual std::vector<Result> execute() = 0;
 };
 
 /**
@@ -46,7 +58,7 @@ public:
 	/**
 	 * \brief Execute the task.
 	 */
-	void operator()();
+	std::vector<Result> execute();
 
 private:
 	std::string vm_name;
@@ -66,17 +78,17 @@ public:
 	/**
 	 * \brief Constructor for Start_packed task.
 	 *
-	 * \param start_tasks A list of start tasks to execute.
+	 * \param start_tasks A vector of start tasks to execute.
 	 */
-	Start_packed(const std::forward_list<Start> &start_tasks);
+	Start_packed(const std::vector<Start> &start_tasks);
 
 	/**
 	 * \brief Execute the task.
 	 */
-	void operator()();
+	std::vector<Result> execute();
 
 private:
-	std::forward_list<Start> start_tasks;
+	std::vector<Start> start_tasks;
 };
 
 /**
@@ -96,10 +108,35 @@ public:
 	/**
 	 * \brief Execute the task.
 	 */
-	void operator()();
+	std::vector<Result> execute();
 
 private:
 	std::string vm_name;
+};
+
+/**
+ * \brief Task to stop virtual machines in packed mode.
+ *
+ * Executes multiple Stop tasks.
+ */
+class Stop_packed : 
+	public Task
+{
+public:
+	/**
+	 * \brief Constructor for Stop_packed task.
+	 *
+	 * \param stop_tasks A vector of stop tasks to execute.
+	 */
+	Stop_packed(const std::vector<Stop> &stop_tasks);
+	
+	/**
+	 * \brief Execute the task.
+	 */
+	std::vector<Result> execute();
+
+private:
+	std::vector<Stop> stop_tasks;
 };
 
 /**
@@ -121,7 +158,7 @@ public:
 	/**
 	 * \brief Execute the task.
 	 */
-	void operator()();
+	std::vector<Result> execute();
 
 private:
 	std::string vm_name;

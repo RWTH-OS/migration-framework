@@ -22,7 +22,7 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	connect_async(host.c_str(), port, keepalive);
 	loop_start();
 	/// TODO: Move subscribe to a dedicated public method.
-	subscribe(nullptr, "topic1", 2);
+	subscribe(nullptr, topic.c_str(), 2);
 	LOG_PRINT(LOG_NOTICE, "MQTT_communicator initialized.");
 }
 
