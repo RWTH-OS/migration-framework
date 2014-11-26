@@ -69,15 +69,16 @@ std::unique_ptr<Task> Parser::generate_migrate_task(const YAML::Node &node)
 
 std::string Parser::results_to_str(const std::vector<Result> &results)
 {
-	std::string str;
-	if (results[0].title == "vm started")
-		str = results[0].title;
-	else if (results[0].title == "vm stopped")
-		str = results[0].title;
-	else if (results[0].title == "migrate done")
-		str = results[0].title;
-	else
-		throw std::invalid_argument("Unknown Result");
-	return str;
+	YAML::Node node;
+	if (results.empty())
+		throw std::invalid_argument("No results to parse.");
+	node["result"] = results[0].title;
+	for (auto &iter : results) {
+		YAML::Node sub_node;
+		sub_node["vm-name"] = iter.vm_name;
+		sub_node["status"] = iter.status;
+		node["list"].push_back(sub_node);
+	}
+	return "---\n" + YAML::Dump(node) + "\n...";
 }
 
