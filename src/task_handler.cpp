@@ -17,15 +17,24 @@ Task_handler::Task_handler() :
 
 void Task_handler::loop()
 {
+	std::string msg;
 	while (running) {
 		try {
-			std::string msg = comm->get_message();
+			msg = comm->get_message();
 			std::unique_ptr<Task> task = parser.str_to_task(msg);
-			comm->send_message(parser.results_to_str(task->execute()));
+			if (task) {
+				auto results = task->execute();
+				comm->send_message(parser.results_to_str(results));
+			}
 			if (msg == "quit")
 				running = false;
+		} catch (const YAML::Exception &e) {
+			LOG_PRINT(LOG_ERR, "Exception while parsing message.");
+			LOG_STREAM(LOG_ERR, e.what());
+			LOG_STREAM(LOG_ERR, "msg dump: " << msg);
 		} catch (const std::exception &e) {
 			LOG_STREAM(LOG_ERR, "Exception: " << e.what());
+			LOG_STREAM(LOG_ERR, "msg dump: " << msg);
 		}
 	}
 }

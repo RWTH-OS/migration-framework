@@ -19,7 +19,8 @@ Start::Start(const std::string &vm_name, size_t vcpus, size_t memory) :
 /// TODO: Call start function of hypervisor.
 std::vector<Result> Start::execute()
 {
-	LOG_PRINT(LOG_NOTICE, "Executing start task.");
+	LOG_PRINT(LOG_DEBUG, "Executing start task.");
+	LOG_STREAM(LOG_DEBUG, "vm_name: " << vm_name << ", vcpus: " << vcpus << ", memory: " << memory);
 	LOG_PRINT(LOG_ERR, "No implementation of start task!");
 	return {Result("vm started", vm_name, "error")};
 }
@@ -46,7 +47,8 @@ Stop::Stop(const std::string &vm_name) :
 /// TODO: Call stop function of hypervisor.
 std::vector<Result> Stop::execute()
 {
-	LOG_PRINT(LOG_NOTICE, "Executing stop task.");
+	LOG_PRINT(LOG_DEBUG, "Executing stop task.");
+	LOG_STREAM(LOG_DEBUG, "vm_name: " << vm_name);
 	LOG_PRINT(LOG_ERR, "No implementation of stop task!");
 	return {Result("vm stopped", vm_name, "error")};
 }
@@ -76,7 +78,8 @@ Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, b
 /// TODO: Call migrate function of hypervisor.
 std::vector<Result> Migrate::execute()
 {
-	LOG_PRINT(LOG_NOTICE, "Executing migration task.");
+	LOG_PRINT(LOG_DEBUG, "Executing migration task.");
+	LOG_STREAM(LOG_DEBUG, "vm_name: " << vm_name << ", dest_hostname: " << dest_hostname << ", live_migration: " << live_migration);
 	LOG_PRINT(LOG_ERR, "No implementation of migrate task!");
 	return {Result("migrate done", vm_name, "error")};
 }

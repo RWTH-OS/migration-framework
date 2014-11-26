@@ -12,9 +12,9 @@ int main(int argc, char *argv[])
 	getopt(argc, argv, "");
 	try {
 		Task_handler task_handler;
-		LOG_PRINT(LOG_NOTICE, "task_handler loop started.");
+		LOG_PRINT(LOG_DEBUG, "task_handler loop started.");
 		task_handler.loop();
-		LOG_PRINT(LOG_NOTICE, "task_handler loop closed.");
+		LOG_PRINT(LOG_DEBUG, "task_handler loop closed.");
 	} catch (const std::exception &e) {
 		LOG_STREAM(LOG_ERR, "Exception: " << e.what());
 	}

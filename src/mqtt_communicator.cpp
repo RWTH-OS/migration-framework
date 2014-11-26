@@ -16,29 +16,29 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	port(port),
 	keepalive(60)
 {
-	LOG_PRINT(LOG_NOTICE, "Initializing MQTT_communicator...");
+	LOG_PRINT(LOG_DEBUG, "Initializing MQTT_communicator...");
 	empty_mutex.lock();
 	mosqpp::lib_init();
 	connect_async(host.c_str(), port, keepalive);
 	loop_start();
 	/// TODO: Move subscribe to a dedicated public method.
 	subscribe(nullptr, topic.c_str(), 2);
-	LOG_PRINT(LOG_NOTICE, "MQTT_communicator initialized.");
+	LOG_PRINT(LOG_DEBUG, "MQTT_communicator initialized.");
 }
 
 MQTT_communicator::~MQTT_communicator()
 {
-	LOG_PRINT(LOG_NOTICE, "Closing MQTT_communicator...");
+	LOG_PRINT(LOG_DEBUG, "Closing MQTT_communicator...");
 	disconnect();
 	loop_stop();
 	mosqpp::lib_cleanup();
-	LOG_PRINT(LOG_NOTICE, "MQTT_communicator closed.");
+	LOG_PRINT(LOG_DEBUG, "MQTT_communicator closed.");
 }
 
 void MQTT_communicator::on_connect(int rc)
 {
 	if (rc == 0) {
-		LOG_STREAM(LOG_NOTICE, "Connection established to " << host << ":" << port);
+		LOG_STREAM(LOG_DEBUG, "Connection established to " << host << ":" << port);
 	} else {
 		LOG_STREAM(LOG_ERR, "Error on connect: Code " << rc);
 	}
@@ -47,7 +47,7 @@ void MQTT_communicator::on_connect(int rc)
 void MQTT_communicator::on_disconnect(int rc)
 {
 	if (rc == 0) {
-		LOG_STREAM(LOG_NOTICE, "Disconnected from  " << host << ":" << port);
+		LOG_STREAM(LOG_DEBUG, "Disconnected from  " << host << ":" << port);
 	} else {
 		LOG_STREAM(LOG_ERR, "Unexpected disconnect: Code " << rc);
 	}
@@ -55,12 +55,12 @@ void MQTT_communicator::on_disconnect(int rc)
 
 void MQTT_communicator::on_publish(int mid)
 {
-	LOG_STREAM(LOG_NOTICE, "Message " << mid << " published.");
+	LOG_STREAM(LOG_DEBUG, "Message " << mid << " published.");
 }
 
 void MQTT_communicator::on_message(const mosquitto_message *msg)
 {
-	LOG_PRINT(LOG_NOTICE, "on_message executed.");
+	LOG_PRINT(LOG_DEBUG, "on_message executed.");
 	std::lock_guard<std::mutex> lock(msg_queue_mutex);
 	if (messages.empty())
 		empty_mutex.unlock();
@@ -69,7 +69,7 @@ void MQTT_communicator::on_message(const mosquitto_message *msg)
 		LOG_PRINT(LOG_ERR, "malloc failed allocating mosquitto_message.");
 	messages.push(buf);
 	mosquitto_message_copy(messages.back(), msg);
-	LOG_PRINT(LOG_NOTICE, "Message added to queue.");
+	LOG_PRINT(LOG_DEBUG, "Message added to queue.");
 }
 
 void MQTT_communicator::send_message(const std::string &message)
@@ -81,7 +81,7 @@ void MQTT_communicator::send_message(const std::string &message)
 
 std::string MQTT_communicator::get_message()
 {
-	LOG_PRINT(LOG_NOTICE, "Wait for message.");
+	LOG_PRINT(LOG_DEBUG, "Wait for message.");
 	mosquitto_message *msg;
 	empty_mutex.lock();
 	{
@@ -93,6 +93,6 @@ std::string MQTT_communicator::get_message()
 	}
 	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
 	mosquitto_message_free(&msg);
-	LOG_PRINT(LOG_NOTICE, "Message received.");
+	LOG_PRINT(LOG_DEBUG, "Message received.");
 	return buf;
 }
