@@ -1,0 +1,7 @@
+---
+task: migrate start
+vm-name: vm1
+destination: pandora2
+parameter:
+  live-migration: false
+...

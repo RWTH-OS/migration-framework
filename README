@@ -1,0 +1,33 @@
+#####################
+### Installation: ###
+#####################
+
+mkdir build && cd build
+cmake ..
+make
+make install #(not implemented yet)
+
+#################
+### Examples: ###
+#################
+
+See examples/ for messages which can be parsed.
+To test messages:
+1. Start mosquitto daemon.
+	mosquitto &
+2. Start migfra daemon:
+	build/migfra
+3. Use mosquitto_pub to publish messages, eg.:
+	mosquitto_pub -f examples/start_task.yaml -q 2 -t topic1
+4, Use mosquitto_sub to see messages, eg.:
+	mosquitto_sub -q 2 -t topic1
+5. Look into log:
+	journalctl -n 20
+
+#######################
+### Logging system: ###
+#######################
+
+You can choose the logging system to use in CMakeLists.txt.
+See comments in there for explanation.
+Systemd is recommended.

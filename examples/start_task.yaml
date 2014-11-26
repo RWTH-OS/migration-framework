@@ -1,0 +1,10 @@
+---
+task: start vm
+vm-configurations: 
+  - name: vm1
+    vcpus: 2
+    memory: 1024
+  - name: vm2
+    vcpus: 4
+    memory: 2048
+...
