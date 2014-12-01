@@ -2,6 +2,8 @@
 
 #include "logging.hpp"
 
+#include <exception>
+
 Result::Result(const std::string &title, const std::string &vm_name, const std::string &status) :
 	title(title),
 	vm_name(vm_name),
@@ -16,13 +18,15 @@ Start::Start(const std::string &vm_name, size_t vcpus, size_t memory) :
 {
 }
 
-/// TODO: Call start function of hypervisor.
-std::vector<Result> Start::execute()
+std::vector<Result> Start::execute(const std::unique_ptr<Hypervisor> &hypervisor)
 {
 	LOG_PRINT(LOG_DEBUG, "Executing start task.");
-	LOG_STREAM(LOG_DEBUG, "vm_name: " << vm_name << ", vcpus: " << vcpus << ", memory: " << memory);
-	LOG_PRINT(LOG_ERR, "No implementation of start task!");
-	return {Result("vm started", vm_name, "error")};
+	try {
+		hypervisor->start(vm_name, vcpus, memory);
+	} catch (const std::exception &e) {
+		return {Result("vm started", vm_name, "error")};
+	}
+	return {Result("vm started", vm_name, "success")};
 }
 
 Start_packed::Start_packed(const std::vector<Start> &start_tasks) :
@@ -30,11 +34,11 @@ Start_packed::Start_packed(const std::vector<Start> &start_tasks) :
 {
 }
 
-std::vector<Result> Start_packed::execute()
+std::vector<Result> Start_packed::execute(const std::unique_ptr<Hypervisor> &hypervisor)
 {
 	std::vector<Result> results;
 	for (auto &start_vm : start_tasks) {
-		results.push_back(start_vm.execute().front());
+		results.push_back(start_vm.execute(hypervisor).front());
 	}
 	return results;
 }
@@ -44,13 +48,15 @@ Stop::Stop(const std::string &vm_name) :
 {
 }
 
-/// TODO: Call stop function of hypervisor.
-std::vector<Result> Stop::execute()
+std::vector<Result> Stop::execute(const std::unique_ptr<Hypervisor> &hypervisor)
 {
 	LOG_PRINT(LOG_DEBUG, "Executing stop task.");
-	LOG_STREAM(LOG_DEBUG, "vm_name: " << vm_name);
-	LOG_PRINT(LOG_ERR, "No implementation of stop task!");
-	return {Result("vm stopped", vm_name, "error")};
+	try {
+		hypervisor->stop(vm_name);
+	} catch (const std::exception &e) {
+		return {Result("vm stopped", vm_name, "error")};
+	}
+	return {Result("vm stopped", vm_name, "success")};
 }
 
 Stop_packed::Stop_packed(const std::vector<Stop> &stop_tasks) :
@@ -58,12 +64,11 @@ Stop_packed::Stop_packed(const std::vector<Stop> &stop_tasks) :
 {
 }
 
-/// TODO: Call stop function of hypervisor.
-std::vector<Result> Stop_packed::execute()
+std::vector<Result> Stop_packed::execute(const std::unique_ptr<Hypervisor> &hypervisor)
 {
 	std::vector<Result> results;
 	for (auto &stop_vm : stop_tasks) {
-		results.push_back(stop_vm.execute().front());
+		results.push_back(stop_vm.execute(hypervisor).front());
 	}
 	return results;
 }
@@ -75,11 +80,13 @@ Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, b
 {
 }
 
-/// TODO: Call migrate function of hypervisor.
-std::vector<Result> Migrate::execute()
+std::vector<Result> Migrate::execute(const std::unique_ptr<Hypervisor> &hypervisor)
 {
 	LOG_PRINT(LOG_DEBUG, "Executing migration task.");
-	LOG_STREAM(LOG_DEBUG, "vm_name: " << vm_name << ", dest_hostname: " << dest_hostname << ", live_migration: " << live_migration);
-	LOG_PRINT(LOG_ERR, "No implementation of migrate task!");
-	return {Result("migrate done", vm_name, "error")};
+	try {
+		hypervisor->migrate(vm_name, dest_hostname, live_migration);
+	} catch (const std::exception &e) {
+		return {Result("migrate done", vm_name, "error")};
+	}
+	return {Result("migrate done", vm_name, "success")};
 }

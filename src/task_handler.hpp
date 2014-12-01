@@ -5,6 +5,7 @@
 
 #include "communicator.hpp"
 #include "parser.hpp"
+#include "hypervisor.hpp"
 
 class Task_handler
 {
@@ -13,6 +14,7 @@ public:
 	void loop();
 private:
 	std::unique_ptr<Communicator> comm;
+	std::unique_ptr<Hypervisor> hypervisor;
 	Parser parser;
 	bool running;
 };

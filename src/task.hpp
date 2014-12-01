@@ -1,8 +1,11 @@
 #ifndef TASK_HPP
 #define TASK_HPP
 
+#include "hypervisor.hpp"
+
 #include <string>
 #include <vector>
+#include <memory>
 
 /**
  * \brief Represents the result of the execute method of a Task.
@@ -34,9 +37,10 @@ public:
 	 * \brief Execute the task.
 	 *
 	 * Pure virtual so every derived task has to implement this method.
-	 * \return Return type is a vector because in packed mode multiple tasks return results.
+	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	virtual std::vector<Result> execute() = 0;
+	virtual std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor) = 0;
 };
 
 /**
@@ -57,8 +61,11 @@ public:
 
 	/**
 	 * \brief Execute the task.
+	 *
+	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute();
+	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::string vm_name;
@@ -84,8 +91,11 @@ public:
 
 	/**
 	 * \brief Execute the task.
+	 *
+	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute();
+	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::vector<Start> start_tasks;
@@ -107,8 +117,11 @@ public:
 	
 	/**
 	 * \brief Execute the task.
+	 *
+	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute();
+	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::string vm_name;
@@ -132,8 +145,11 @@ public:
 	
 	/**
 	 * \brief Execute the task.
+	 *
+	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute();
+	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::vector<Stop> stop_tasks;
@@ -157,8 +173,11 @@ public:
 
 	/**
 	 * \brief Execute the task.
+	 *
+	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute();
+	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::string vm_name;
