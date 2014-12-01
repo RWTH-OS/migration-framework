@@ -2,6 +2,9 @@
 ### Installation: ###
 #####################
 
+Requirements: 
+libmosquittopp, yaml-cpp & libvirt installed.
+
 mkdir build && cd build
 cmake ..
 make
@@ -23,6 +26,9 @@ To test messages:
 	mosquitto_sub -q 2 -t topic1
 5. Look into log:
 	journalctl -n 20
+
+To verify new examples this online yaml parser is useful:
+http://yaml-online-parser.appspot.com
 
 #######################
 ### Logging system: ###

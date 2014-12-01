@@ -17,7 +17,6 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	keepalive(60)
 {
 	LOG_PRINT(LOG_DEBUG, "Initializing MQTT_communicator...");
-	empty_mutex.lock();
 	mosqpp::lib_init();
 	connect_async(host.c_str(), port, keepalive);
 	loop_start();
@@ -61,14 +60,14 @@ void MQTT_communicator::on_publish(int mid)
 void MQTT_communicator::on_message(const mosquitto_message *msg)
 {
 	LOG_PRINT(LOG_DEBUG, "on_message executed.");
-	std::lock_guard<std::mutex> lock(msg_queue_mutex);
-	if (messages.empty())
-		empty_mutex.unlock();
 	mosquitto_message* buf = static_cast<mosquitto_message*>(malloc(sizeof(mosquitto_message)));
 	if (!buf) 
 		LOG_PRINT(LOG_ERR, "malloc failed allocating mosquitto_message.");
+	std::lock_guard<std::mutex> lock(msg_queue_mutex);
 	messages.push(buf);
 	mosquitto_message_copy(messages.back(), msg);
+	if (messages.size() == 1)
+		msg_queue_empty_cv.notify_one();
 	LOG_PRINT(LOG_DEBUG, "Message added to queue.");
 }
 
@@ -82,15 +81,11 @@ void MQTT_communicator::send_message(const std::string &message)
 std::string MQTT_communicator::get_message()
 {
 	LOG_PRINT(LOG_DEBUG, "Wait for message.");
-	mosquitto_message *msg;
-	empty_mutex.lock();
-	{
-		std::lock_guard<std::mutex> lock(msg_queue_mutex);
-		msg = messages.front();
-		messages.pop();
-		if(!messages.empty())
-			empty_mutex.unlock();
-	}
+	std::unique_lock<std::mutex> lock(msg_queue_mutex);
+	while (messages.empty())
+		msg_queue_empty_cv.wait(lock);
+	mosquitto_message *msg = messages.front();
+	messages.pop();
 	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
 	mosquitto_message_free(&msg);
 	LOG_PRINT(LOG_DEBUG, "Message received.");

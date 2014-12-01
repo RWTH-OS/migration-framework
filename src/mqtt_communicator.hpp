@@ -7,6 +7,7 @@
 
 #include <string>
 #include <mutex>
+#include <condition_variable>
 #include <queue>
 
 class MQTT_communicator : 
@@ -19,8 +20,8 @@ private:
 	std::string host;
 	int port;
 	int keepalive;
-	std::mutex empty_mutex;
 	std::mutex msg_queue_mutex;
+	std::condition_variable msg_queue_empty_cv;
 	std::queue<mosquitto_message*> messages; /// TODO: Consider using unique_ptr.
 
 	void on_connect(int rc);
