@@ -63,7 +63,7 @@ Genaues Kommunikationsprotokoll für die verschiedenen Anwendungsfälle
   Payload:
 =============
 task: init
-  source: <hostname>
+source: <hostname>
 =============
   Erwartetes Verhalten: Der für den Knoten zuständige Scheduler empfängt die
                         Nachricht und nimmt den Knoten in sein Scheduling mit
@@ -79,17 +79,17 @@ task: init
   Payload:
 =============
 task: init agent
-  topic: <topic the scheduler listens to>
-  KPI:
-    categories:
-      - energy consumption: <energy>
-      - compute intensity: <high,medium,low>
-      - IO intensity: <high,medium,low>
-      - communication intensity (network): <high,medium,low>
-      - expected runtime: <high,medium,low>
-      - compute device: <CPU,GPU>
-      - dependencies: <next_phase>
-    repeat: <number in seconds how often the KPIs are reported>
+topic: <topic the scheduler listens to>
+KPI:
+  categories:
+    - energy consumption: <energy>
+    - compute intensity: <high,medium,low>
+    - IO intensity: <high,medium,low>
+    - communication intensity (network): <high,medium,low>
+    - expected runtime: <high,medium,low>
+    - compute device: <CPU,GPU>
+    - dependencies: <next_phase>
+  repeat: <number in seconds how often the KPIs are reported>
 =============
   Erwartetes Verhalten: Der Agent merkt sich die entsprechende Konfiguration
                         und reagiert entsprechend. Der für den Knoten zuständige
@@ -105,14 +105,14 @@ task: init agent
   Payload:
 =============
 task: start vm
-  vm-configurations:
-    - name: <string>
-      vcpus: #CPU
-      memory: #byte
-    - name: <string>
-      vcpus: #CPU
-      memory: #byte
-    - ..
+vm-configurations:
+  - name: <string>
+    vcpus: #CPU
+    memory: #byte
+  - name: <string>
+    vcpus: #CPU
+    memory: #byte
+  - ..
 =============
   Erwartetes Verhalten: Entsprechende VMs werden gestartet.
 
@@ -124,13 +124,21 @@ task: start vm
   Topic: <topic the scheduler listens to>
   Payload:
 =============
-task: vm started
-  vm-name: <vm-hostname>
-  status: ready | error
+result: vm started
+list:
+  - vm-name: <vm-hostname>
+    status: success | error
+  - vm-name: <vm-hostname>
+    status: success | error
+  - ..
 =============
   Erwartetes Verhalten: Der für den Knoten zuständige Scheduler empfängt die
                         Nachricht und startet die Anwendung in der VM.
   Implementierung: Über mqtt_publish in Startup Skript der VM.
+                   // Zwei Möglichkeiten:
+                   // 1. VM sendet an migfra "vm ready", migfra sendet dies gebündelt an scheduler mit "vm started"
+                   // 2. Einfacher zu implementieren, aber mehr Nachrichten an scheduler: 
+                   //    Pro VM ein "vm started" ohne "vm ready" direkt von migfra oder VM an scheduler.
 
 
 * VM STOPPEN
@@ -139,8 +147,11 @@ task: vm started
   Topic: <hostname>-migra
   Payload:
 =============
-task: vm stopped
-  vm-name: <vm name>
+task: stop vm
+list:
+  - vm-name: <vm name>
+  - vm-name: <vm name>
+  - ..
 =============
   Erwartetes Verhalten: VM wird gestoppt.
 
@@ -151,9 +162,13 @@ task: vm stopped
   Topic: <topic the scheduler listens to>
   Payload
 =============
-task: vm stopped
-  vm-name: <vm-hostname>
-  status: stopped | error
+result: vm stopped
+list:
+  - vm-name: <vm-hostname>
+    status: success | error
+  - vm-name: <vm-hostname>
+    status: success | error
+  - ..
 =============
   Erwartetes Verhalten: VM aufräumen? Log files für den Nutzer rauskopieren?
 
@@ -170,13 +185,13 @@ task: vm stopped
   Payload:
 =============
 task: new application
-  job-description:
-    job-id: <job id>
-    process-id: <process id of the vm>
-  vm-configuration:
-    name: <string>
-    vcpus: #CPU
-    memory: #byte
+job-description:
+  job-id: <job id>
+  process-id: <process id of the vm>
+vm-configuration:
+  name: <string>
+  vcpus: #CPU
+  memory: #byte
 =============
   Erwartetes Verhalten: Agent über die VM in der die Anwendung läuft und beginnt
                         mit Optimierung.
@@ -189,9 +204,9 @@ task: new application
   Payload
 ============
 task: stop monitoring
-  job-description:
-    job-id: <job id>
-    process-id: <process id of the vm>
+job-description:
+  job-id: <job id>
+  process-id: <process id of the vm>
 ============
   Erwartetes Verhalten: Agent hört auf den Prozess zu überwachen.
 
@@ -202,11 +217,11 @@ task: stop monitoring
   Topic: <hostname>-migfra
   Payload
 ============
-task: migrate start
-  vm-name: <vm name>
-  destination: <destination hostname>
-  parameter:
-    live migration: true | false
+task: migrate vm
+vm-name: <vm name>
+destination: <destination hostname>
+parameter:
+  live-migration: true | false
 ============
 
 
@@ -216,10 +231,33 @@ task: migrate start
   Topic: <scheduler defined topic id>
   Payload
 ============
-task: migrate done
-  vm-name: <vm name>
+result: vm migrated
+vm-name: <vm name>
+status: success | error
 ============
   Erwartetes Verhalten: Scheduler markiert ursprüngliche Ressource als frei.
 
 
 * ANWENDUNG <-> AGENT
+
+
+
+-----------
+Übersicht der migfra tasks:
+start vm
+stop vm
+migrate vm
+
+Übersicht der migfra results:
+vm started
+(vm ready <- von VM gesendet)
+vm stopped
+vm migrated
+
+=> Eine msg pro gestartete VM oder eine msg mit allen gestarteten VMs an scheduler? (siehe Kommentar unter "vm started")
+=> Einheitlicher result status: "status: success | error" (Eventuell "details: <error description>" hinzufügen für mehr Infos.)
+=> Einheitlicher task/result Name: "task: <start|stop|migrate> vm", "result: vm <started|stopped|migrated>" 
+
+Online YAML parser:
+http://yaml-online-parser.appspot.com/
+
