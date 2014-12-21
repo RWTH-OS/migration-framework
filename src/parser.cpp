@@ -5,7 +5,49 @@
 
 #include <stdexcept>
 
-std::unique_ptr<Task> Parser::str_to_task(const std::string &str)
+namespace parser {
+
+std::unique_ptr<Task> generate_start_task(const YAML::Node &node)
+{
+	if (!node["vm-configurations"])
+		throw std::invalid_argument("No vm-configurations for start_task found.");
+	std::vector<Start> start_tasks;
+	for (auto &iter : node["vm-configurations"]) {
+		if (!iter["name"] || !iter["vcpus"] || !iter["memory"])
+			throw std::invalid_argument("Invalid vm-config in start_task found.");
+		std::string name = iter["name"].as<std::string>();
+		size_t vcpus = iter["vcpus"].as<size_t>();
+		size_t memory = iter["memory"].as<size_t>();
+		start_tasks.push_back(Start(name, vcpus, memory));
+	}
+	return std::unique_ptr<Task>(new Start_packed(start_tasks));
+}
+
+std::unique_ptr<Task> generate_stop_task(const YAML::Node &node)
+{
+	if (!node["vm-configurations"])
+		throw std::invalid_argument("No vm-configurations for stop_task found.");
+	std::vector<Stop> stop_tasks;
+	for (auto &iter : node["vm-configurations"]) {
+		if (!iter["vm-name"])
+			throw std::invalid_argument("Invalid vm-config in stop_task found.");
+		std::string vm_name = iter["vm-name"].as<std::string>();
+		stop_tasks.push_back(Stop(vm_name));
+	}
+	return std::unique_ptr<Task>(new Stop_packed(stop_tasks));
+}
+
+std::unique_ptr<Task> generate_migrate_task(const YAML::Node &node)
+{
+	if (!node["vm-name"] || !node["destination"] || !node["parameter"] || !node["parameter"]["live-migration"])
+		throw std::invalid_argument("Invalid vm-config in migrate_task found.");
+	std::string vm_name = node["vm-name"].as<std::string>();
+	std::string destination = node["destination"].as<std::string>();
+	bool live_migration = node["parameter"]["live-migration"].as<bool>();
+	return std::unique_ptr<Task>(new Migrate(vm_name, destination, live_migration));
+}
+
+std::unique_ptr<Task> str_to_task(const std::string &str)
 {
 	YAML::Node node = YAML::Load(str);
 	if (node["task"]) {
@@ -27,47 +69,7 @@ std::unique_ptr<Task> Parser::str_to_task(const std::string &str)
 	}
 }
 
-std::unique_ptr<Task> Parser::generate_start_task(const YAML::Node &node)
-{
-	if (!node["vm-configurations"])
-		throw std::invalid_argument("No vm-configurations for start_task found.");
-	std::vector<Start> start_tasks;
-	for (auto &iter : node["vm-configurations"]) {
-		if (!iter["name"] || !iter["vcpus"] || !iter["memory"])
-			throw std::invalid_argument("Invalid vm-config in start_task found.");
-		std::string name = iter["name"].as<std::string>();
-		size_t vcpus = iter["vcpus"].as<size_t>();
-		size_t memory = iter["memory"].as<size_t>();
-		start_tasks.push_back(Start(name, vcpus, memory));
-	}
-	return std::unique_ptr<Task>(new Start_packed(start_tasks));
-}
-
-std::unique_ptr<Task> Parser::generate_stop_task(const YAML::Node &node)
-{
-	if (!node["vm-configurations"])
-		throw std::invalid_argument("No vm-configurations for stop_task found.");
-	std::vector<Stop> stop_tasks;
-	for (auto &iter : node["vm-configurations"]) {
-		if (!iter["vm-name"])
-			throw std::invalid_argument("Invalid vm-config in stop_task found.");
-		std::string vm_name = iter["vm-name"].as<std::string>();
-		stop_tasks.push_back(Stop(vm_name));
-	}
-	return std::unique_ptr<Task>(new Stop_packed(stop_tasks));
-}
-
-std::unique_ptr<Task> Parser::generate_migrate_task(const YAML::Node &node)
-{
-	if (!node["vm-name"] || !node["destination"] || !node["parameter"] || !node["parameter"]["live-migration"])
-		throw std::invalid_argument("Invalid vm-config in migrate_task found.");
-	std::string vm_name = node["vm-name"].as<std::string>();
-	std::string destination = node["destination"].as<std::string>();
-	bool live_migration = node["parameter"]["live-migration"].as<bool>();
-	return std::unique_ptr<Task>(new Migrate(vm_name, destination, live_migration));
-}
-
-std::string Parser::results_to_str(const std::vector<Result> &results)
+std::string results_to_str(const std::vector<Result> &results)
 {
 	YAML::Node node;
 	if (results.empty())
@@ -82,3 +84,4 @@ std::string Parser::results_to_str(const std::vector<Result> &results)
 	return "---\n" + YAML::Dump(node) + "\n...";
 }
 
+} // namespace parser
