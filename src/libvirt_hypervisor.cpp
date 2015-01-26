@@ -18,7 +18,7 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
-	if (!virConnectClose(local_host_conn))
+	if (virConnectClose(local_host_conn))
 		LOG_PRINT(LOG_WARNING, "Some qemu connections have not been closed after destruction of hypervisor wrapper!");
 }
 

@@ -22,9 +22,11 @@ Thread_counter::~Thread_counter()
 
 void Thread_counter::wait_for_threads_to_finish()
 {
+	LOG_PRINT(LOG_DEBUG, "Waiting for threads to finish...");
 	std::unique_lock<std::mutex> lock(count_mutex);
 	while (count != 0)
 		count_cv.wait(lock);
+	LOG_PRINT(LOG_DEBUG, "All threads are finished.");
 }
 
 unsigned int Thread_counter::count;

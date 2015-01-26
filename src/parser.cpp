@@ -72,6 +72,8 @@ Task str_to_task(const std::string &str)
 			return generate_stop_task(node);
 		else if (task_name == "migrate start")
 			return generate_migrate_task(node);
+		else if (task_name == "quit")
+			throw std::runtime_error("quit");
 		else
 			throw std::invalid_argument("Unknown task_name.");
 	} else if (node["result"]) {

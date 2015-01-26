@@ -41,8 +41,13 @@ void Task_handler::loop()
 			LOG_STREAM(LOG_ERR, e.what());
 			LOG_STREAM(LOG_ERR, "msg dump: " << msg);
 		} catch (const std::exception &e) {
-			LOG_STREAM(LOG_ERR, "Exception: " << e.what());
-			LOG_STREAM(LOG_ERR, "msg dump: " << msg);
+			if (e.what() == std::string("quit")) {
+				running = false;
+				LOG_PRINT(LOG_DEBUG, "Quit msg received.");
+			} else {
+				LOG_STREAM(LOG_ERR, "Exception: " << e.what());
+				LOG_STREAM(LOG_ERR, "msg dump: " << msg);
+			}
 		}
 	}
 }
