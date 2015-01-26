@@ -11,30 +11,38 @@ std::unique_ptr<Task> generate_start_task(const YAML::Node &node)
 {
 	if (!node["vm-configurations"])
 		throw std::invalid_argument("No vm-configurations for start_task found.");
-	std::vector<Start> start_tasks;
+	std::vector<std::shared_ptr<Sub_task>> start_tasks;
 	for (auto &iter : node["vm-configurations"]) {
 		if (!iter["name"] || !iter["vcpus"] || !iter["memory"])
 			throw std::invalid_argument("Invalid vm-config in start_task found.");
 		std::string name = iter["name"].as<std::string>();
 		size_t vcpus = iter["vcpus"].as<size_t>();
 		size_t memory = iter["memory"].as<size_t>();
-		start_tasks.push_back(Start(name, vcpus, memory));
+		bool concurrent_execution = iter["concurrent_execution"] ? 
+			iter["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+		start_tasks.emplace_back(new Start(name, vcpus, memory, concurrent_execution));
 	}
-	return std::unique_ptr<Task>(new Start_packed(start_tasks));
+	bool concurrent_execution = node["concurrent_execution"] ? 
+		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+	return std::unique_ptr<Task>(new Task(std::move(start_tasks), concurrent_execution));
 }
 
 std::unique_ptr<Task> generate_stop_task(const YAML::Node &node)
 {
 	if (!node["vm-configurations"])
 		throw std::invalid_argument("No vm-configurations for stop_task found.");
-	std::vector<Stop> stop_tasks;
+	std::vector<std::shared_ptr<Sub_task>> stop_tasks;
 	for (auto &iter : node["vm-configurations"]) {
 		if (!iter["vm-name"])
 			throw std::invalid_argument("Invalid vm-config in stop_task found.");
 		std::string vm_name = iter["vm-name"].as<std::string>();
-		stop_tasks.push_back(Stop(vm_name));
+		bool concurrent_execution = iter["concurrent_execution"] ? 
+			iter["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+		stop_tasks.emplace_back(new Stop(vm_name, concurrent_execution));
 	}
-	return std::unique_ptr<Task>(new Stop_packed(stop_tasks));
+	bool concurrent_execution = node["concurrent_execution"] ? 
+		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+	return std::unique_ptr<Task>(new Task(std::move(stop_tasks), concurrent_execution));
 }
 
 std::unique_ptr<Task> generate_migrate_task(const YAML::Node &node)
@@ -44,7 +52,11 @@ std::unique_ptr<Task> generate_migrate_task(const YAML::Node &node)
 	std::string vm_name = node["vm-name"].as<std::string>();
 	std::string destination = node["destination"].as<std::string>();
 	bool live_migration = node["parameter"]["live-migration"].as<bool>();
-	return std::unique_ptr<Task>(new Migrate(vm_name, destination, live_migration));
+	bool concurrent_execution = node["concurrent_execution"] ? 
+		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+	std::vector<std::shared_ptr<Sub_task>> migrate_tasks;
+	migrate_tasks.emplace_back(new Migrate(vm_name, destination, live_migration, false));
+	return std::unique_ptr<Task>(new Task(std::move(migrate_tasks), concurrent_execution));
 }
 
 std::unique_ptr<Task> str_to_task(const std::string &str)

@@ -1,7 +1,7 @@
 ---
 task: migrate start
-vm-name: vm1
-destination: pandora2
+vm-name: vm2
+destination: localhost
 parameter:
   live-migration: false
 ...

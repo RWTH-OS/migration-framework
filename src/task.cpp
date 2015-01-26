@@ -1,8 +1,36 @@
 #include "task.hpp"
 
+#include "parser.hpp"
 #include "logging.hpp"
 
 #include <exception>
+#include <future>
+#include <utility>
+
+Thread_counter::Thread_counter()
+{
+	std::unique_lock<std::mutex> lock(count_mutex);
+	++count;
+}
+
+Thread_counter::~Thread_counter()
+{
+	std::unique_lock<std::mutex> lock(count_mutex);
+	if (--count == 0)
+		count_cv.notify_one();
+}
+
+void Thread_counter::wait_for_threads_to_finish()
+{
+	std::unique_lock<std::mutex> lock(count_mutex);
+	while (count != 0)
+		count_cv.wait(lock);
+}
+
+unsigned int Thread_counter::count;
+std::mutex Thread_counter::count_mutex;
+std::condition_variable Thread_counter::count_cv;
+
 
 Result::Result(const std::string &title, const std::string &vm_name, const std::string &status) :
 	title(title),
@@ -11,82 +39,100 @@ Result::Result(const std::string &title, const std::string &vm_name, const std::
 {
 }
 
-Start::Start(const std::string &vm_name, size_t vcpus, size_t memory) :
+Sub_task::Sub_task(bool concurrent_execution) :
+	concurrent_execution(concurrent_execution)
+{
+}
+
+Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_execution) :
+	sub_tasks(std::move(sub_tasks)), concurrent_execution(concurrent_execution)
+{
+}
+
+void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm)
+{
+	/// TODO: In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
+	auto &sub_tasks = this->sub_tasks;
+	auto func = [&hypervisor, &comm, sub_tasks] 
+	{
+		std::vector<std::future<Result>> future_results;
+		for (auto &sub_task : sub_tasks) // start subtasks
+			future_results.push_back(sub_task->execute(hypervisor));
+		std::vector<Result> results;
+		for (auto &future_result : future_results) // wait for subtasks to finish
+			results.push_back(future_result.get());
+		comm->send_message(parser::results_to_str(results));
+	};
+	concurrent_execution ? std::thread([func]{Thread_counter cnt; func();}).detach() : func();
+}
+
+Start::Start(const std::string &vm_name, size_t vcpus, size_t memory, bool concurrent_execution) :
+	Sub_task::Sub_task(concurrent_execution),
 	vm_name(vm_name),
 	vcpus(vcpus),
 	memory(memory)
 {
 }
 
-std::vector<Result> Start::execute(const std::unique_ptr<Hypervisor> &hypervisor)
+std::future<Result> Start::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	LOG_PRINT(LOG_DEBUG, "Executing start task.");
-	try {
-		hypervisor->start(vm_name, vcpus, memory);
-	} catch (const std::exception &e) {
-		return {Result("vm started", vm_name, "error")};
-	}
-	return {Result("vm started", vm_name, "success")};
+	auto &vm_name = this->vm_name; // In C++14 init capture should be used!
+	auto &vcpus = this->vcpus;
+	auto &memory = this->memory;
+	auto func = [&hypervisor, vm_name, vcpus, memory] () 
+	{
+		try {
+			hypervisor->start(vm_name, vcpus, memory);
+		} catch (const std::exception &e) {
+			return Result("vm started", vm_name, "error");
+		}
+		return Result("vm started", vm_name, "success");
+	};
+	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Start_packed::Start_packed(const std::vector<Start> &start_tasks) :
-	start_tasks(start_tasks)
-{
-}
-
-std::vector<Result> Start_packed::execute(const std::unique_ptr<Hypervisor> &hypervisor)
-{
-	std::vector<Result> results;
-	for (auto &start_vm : start_tasks) {
-		results.push_back(start_vm.execute(hypervisor).front());
-	}
-	return results;
-}
-
-Stop::Stop(const std::string &vm_name) :
+Stop::Stop(const std::string &vm_name, bool concurrent_execution) :
+	Sub_task::Sub_task(concurrent_execution),
 	vm_name(vm_name)
 {
 }
 
-std::vector<Result> Stop::execute(const std::unique_ptr<Hypervisor> &hypervisor)
+std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	LOG_PRINT(LOG_DEBUG, "Executing stop task.");
-	try {
-		hypervisor->stop(vm_name);
-	} catch (const std::exception &e) {
-		return {Result("vm stopped", vm_name, "error")};
-	}
-	return {Result("vm stopped", vm_name, "success")};
+	auto &vm_name = this->vm_name; // In C++14 init capture should be used!
+	auto func = [&hypervisor, vm_name] ()
+	{
+		try {
+			hypervisor->stop(vm_name);
+		} catch (const std::exception &e) {
+			return Result("vm stopped", vm_name, "error");
+		}
+		return Result("vm stopped", vm_name, "success");
+	};
+	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Stop_packed::Stop_packed(const std::vector<Stop> &stop_tasks) :
-	stop_tasks(stop_tasks)
-{
-}
-
-std::vector<Result> Stop_packed::execute(const std::unique_ptr<Hypervisor> &hypervisor)
-{
-	std::vector<Result> results;
-	for (auto &stop_vm : stop_tasks) {
-		results.push_back(stop_vm.execute(hypervisor).front());
-	}
-	return results;
-}
-
-Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration) :
+Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution) :
+	Sub_task::Sub_task(concurrent_execution),
 	vm_name(vm_name),
 	dest_hostname(dest_hostname),
 	live_migration(live_migration)
 {
 }
 
-std::vector<Result> Migrate::execute(const std::unique_ptr<Hypervisor> &hypervisor)
+std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	LOG_PRINT(LOG_DEBUG, "Executing migration task.");
-	try {
-		hypervisor->migrate(vm_name, dest_hostname, live_migration);
-	} catch (const std::exception &e) {
-		return {Result("migrate done", vm_name, "error")};
-	}
-	return {Result("migrate done", vm_name, "success")};
+	auto &vm_name = this->vm_name; /// TODO: In C++14 init capture should be used!
+	auto &dest_hostname = this->dest_hostname;
+	auto &live_migration = this->live_migration;
+	auto func = [&hypervisor, vm_name, dest_hostname, live_migration] ()
+	{
+		try {
+			hypervisor->migrate(vm_name, dest_hostname, live_migration);
+		} catch (const std::exception &e) {
+			return Result("migrate done", vm_name, "error");
+		}
+		return Result("migrate done", vm_name, "success");
+	};
+	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }

@@ -26,8 +26,7 @@ void Task_handler::loop()
 			msg = comm->get_message();
 			std::unique_ptr<Task> task = parser::str_to_task(msg);
 			if (task) {
-				auto results = task->execute(hypervisor);
-				comm->send_message(parser::results_to_str(results));
+				task->execute(hypervisor, comm);
 			}
 		} catch (const YAML::Exception &e) {
 			LOG_PRINT(LOG_ERR, "Exception while parsing message.");

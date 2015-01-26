@@ -12,8 +12,8 @@ public:
 	Task_handler();
 	void loop();
 private:
-	std::unique_ptr<Communicator> comm;
-	std::unique_ptr<Hypervisor> hypervisor;
+	std::shared_ptr<Communicator> comm;
+	std::shared_ptr<Hypervisor> hypervisor;
 	bool running;
 };
 

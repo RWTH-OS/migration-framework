@@ -3,12 +3,51 @@
 
 #include "hypervisor.hpp"
 
+#include "communicator.hpp"
+
 #include <string>
 #include <vector>
 #include <memory>
+#include <future>
+#include <mutex>
+#include <condition_variable>
 
 /**
- * \brief Represents the result of the execute method of a Task.
+ * \brief RAII-style thread counter.
+ *
+ * Each instance of Thread_counter represents a running thread.
+ * The constructor increments and the destructor decrements the counter.
+ * A condition variable is used to wait for the counter to become zero.
+ * 
+ * TODO: Move static member variables to seperate class to provide multiple thread counters.
+ */
+class Thread_counter
+{
+public:
+	/**
+	 * \brief Constructor increments counter.
+	 */
+	Thread_counter();
+
+	/**
+	 * \brief Destructor decrements counter.
+	 */
+	~Thread_counter();
+
+	/**
+	 * \brief Wait until count is zero using a condition variable.
+	 */
+	static void wait_for_threads_to_finish();
+private:
+	static unsigned int count;
+	static std::mutex count_mutex;
+	static std::condition_variable count_cv;
+};
+
+/**
+ * \brief Represents the result of a Sub_task.
+ *
+ * Results are sent back packed in a vector representing all results of a Task.
  */
 struct Result
 {
@@ -18,54 +57,76 @@ struct Result
 	std::string status;
 };
 
+class Sub_task
+{
+public:
+	/**
+	 * \brief Constructor for Sub_task.
+	 *
+	 * \param concurrent_execution Execute Sub_task in dedicated thread.
+	 */
+	Sub_task(bool concurrent_execution);
+	virtual ~Sub_task(){};
+	virtual std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor) = 0;
+protected:
+	bool concurrent_execution;
+};
+
 /**
- * \brief Abstract base class for tasks.
+ * \brief Generic task class containing sub tasks.
  *
- * Every task has to inherit from this class.
- * Task_handler will call execute() to execute the task.
- * TODO: Create Result class to be returned by operator() of tasks.
+ * Contains several Sub_tasks and executes those.
+ * Task_handler will call execute method to execute the task.
  */
 class Task
 {
 public:
 	/**
-	 * \brief Virtual destructor for proper destruction.
+	 * \brief Constructor for Task.
+	 *
+	 * \param sub_tasks The sub tasks to execute.
+	 * \param concurrent_execution Create and wait on subtasks to be finished in dedicated thread.
 	 */
-	virtual ~Task(){};
+	Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_execution);
 
 	/**
 	 * \brief Execute the task.
 	 *
-	 * Pure virtual so every derived task has to implement this method.
-	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * Executes all sub_tasks.
+	 * Starts a new thread if concurrent_execution is true.
 	 * \param hypervisor Hypervisor to be used for execution.
+	 * \param comm Communicator to be used to send results.
 	 */
-	virtual std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor) = 0;
+	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm);
+private:
+	std::vector<std::shared_ptr<Sub_task>> sub_tasks;
+	bool concurrent_execution;
 };
 
 /**
- * \brief Task to start a virtual machine.
+ * \brief Sub_task to start a single virtual machine.
  */
-class Start : 
-	public Task
+class Start :
+	public Sub_task
 {
 public:
 	/**
-	 * \brief Constructor for Start task.
+	 * \brief Constructor for Start sub task.
 	 *
 	 * \param vm_name The name of the virtual machine to start.
 	 * \param vcpus The number of virtual cpus to assign to the virtual machine.
 	 * \param memory The ram to assign to the virtual machine in MiB.
+	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Start(const std::string &vm_name, size_t vcpus, size_t memory);
+	Start(const std::string &vm_name, size_t vcpus, size_t memory, bool concurrent_execution);
 
 	/**
-	 * \brief Execute the task.
+	 * \brief Execute the Sub_task.
 	 *
-	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \return Returns Result of Sub_task.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
+	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::string vm_name;
@@ -74,110 +135,56 @@ private:
 };
 
 /**
- * \brief Task to start virtual machines in packed mode.
- *
- * Executes multiple Start tasks.
+ * \brief Sub_task to stop a single virtual machine.
  */
-class Start_packed :
-	public Task
+class Stop :
+	public Sub_task
 {
 public:
 	/**
-	 * \brief Constructor for Start_packed task.
-	 *
-	 * \param start_tasks A vector of start tasks to execute.
-	 */
-	Start_packed(const std::vector<Start> &start_tasks);
-
-	/**
-	 * \brief Execute the task.
-	 *
-	 * \return Return type is a vector, because in packed mode multiple tasks return results.
-	 * \param hypervisor Hypervisor to be used for execution.
-	 */
-	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
-
-private:
-	std::vector<Start> start_tasks;
-};
-
-/**
- * \brief Task to stop a virtual machine.
- */
-class Stop : 
-	public Task
-{
-public:
-	/**
-	 * \brief Constructor for Stop task.
+	 * \brief Constructor for Stop sub task.
 	 *
 	 * \param vm_name The name of the virtual machine to stop.
+	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Stop(const std::string &vm_name);
+	Stop(const std::string &vm_name, bool concurrent_execution);
 	
 	/**
-	 * \brief Execute the task.
+	 * \brief Execute the Sub_task.
 	 *
-	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \return Returns Result of Sub_task.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
+	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::string vm_name;
 };
 
 /**
- * \brief Task to stop virtual machines in packed mode.
- *
- * Executes multiple Stop tasks.
- */
-class Stop_packed : 
-	public Task
-{
-public:
-	/**
-	 * \brief Constructor for Stop_packed task.
-	 *
-	 * \param stop_tasks A vector of stop tasks to execute.
-	 */
-	Stop_packed(const std::vector<Stop> &stop_tasks);
-	
-	/**
-	 * \brief Execute the task.
-	 *
-	 * \return Return type is a vector, because in packed mode multiple tasks return results.
-	 * \param hypervisor Hypervisor to be used for execution.
-	 */
-	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
-
-private:
-	std::vector<Stop> stop_tasks;
-};
-
-/**
- * \brief Task to migrate a virtual machine.
+ * \brief Sub_task to migrate a virtual machine.
  */
 class Migrate : 
-	public Task
+	public Sub_task
 {
 public:
 	/**
-	 * \brief Constructor for Migrate task.
+	 * \brief Constructor for Migrate sub task.
 	 *
 	 * \param vm_name The name of the virtual machine to migrate.
 	 * \param dest_hostname The name of the host to migrate to.
 	 * \param live_migration Option to enable live migration.
+	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration);
+	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution);
 
 	/**
-	 * \brief Execute the task.
+	 * \brief Execute the Sub_task.
 	 *
-	 * \return Return type is a vector, because in packed mode multiple tasks return results.
+	 * \return Returns Result of Sub_task.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::vector<Result> execute(const std::unique_ptr<Hypervisor> &hypervisor);
+	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
 private:
 	std::string vm_name;
