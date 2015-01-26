@@ -10,7 +10,7 @@
 
 /// TODO: Get hostname dynamically.
 Libvirt_hypervisor::Libvirt_hypervisor() :
-	local_host_conn(virConnectOpen("qemu+ssh://localhost/system"))
+	local_host_conn(virConnectOpen("qemu:///system"))
 {
 	if (!local_host_conn)
 		throw std::runtime_error("Failed to connect to qemu on local host.");

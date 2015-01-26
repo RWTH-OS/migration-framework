@@ -32,7 +32,8 @@ public:
 	MQTT_communicator(const std::string &id, 
 			  const std::string &topic, 
 			  const std::string &host, 
-			  int port);
+			  int port,
+			  int keepalive);
 	~MQTT_communicator();
 	void send_message(const std::string &message);
 	std::string get_message();

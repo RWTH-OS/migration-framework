@@ -8,13 +8,14 @@
 MQTT_communicator::MQTT_communicator(const std::string &id, 
 				     const std::string &topic,
 				     const std::string &host, 
-				     int port) :
+				     int port,
+				     int keepalive) :
 	mosqpp::mosquittopp(id.c_str()),
 	id(id), 
 	topic(topic),
 	host(host), 
 	port(port),
-	keepalive(60)
+	keepalive(keepalive)
 {
 	LOG_PRINT(LOG_DEBUG, "Initializing MQTT_communicator...");
 	mosqpp::lib_init();

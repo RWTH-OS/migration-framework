@@ -11,7 +11,7 @@
 #include <exception>
 
 Task_handler::Task_handler() : 
-	comm(new MQTT_communicator("test-id", "topic1", "localhost", 1883)),
+	comm(new MQTT_communicator("test-id", "topic1", "localhost", 1883, 60)),
 	hypervisor(new Libvirt_hypervisor()),
 	running(true)
 {
