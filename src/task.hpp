@@ -82,6 +82,13 @@ class Task
 {
 public:
 	/**
+	 * \brief Generate trivial default constructor.
+	 *
+	 * Constructs a Task without sub tasks.
+	 * The execute method will return immediatly on a such constructed Task.
+	 */
+	Task() = default;
+	/**
 	 * \brief Constructor for Task.
 	 *
 	 * \param sub_tasks The sub tasks to execute.

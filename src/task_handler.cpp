@@ -20,14 +20,11 @@ Task_handler::Task_handler() :
 
 void Task_handler::loop()
 {
-	std::string msg;
 	while (running) {
+		std::string msg;
 		try {
 			msg = comm->get_message();
-			std::unique_ptr<Task> task = parser::str_to_task(msg);
-			if (task) {
-				task->execute(hypervisor, comm);
-			}
+			parser::str_to_task(msg).execute(hypervisor, comm);
 		} catch (const YAML::Exception &e) {
 			LOG_PRINT(LOG_ERR, "Exception while parsing message.");
 			LOG_STREAM(LOG_ERR, e.what());

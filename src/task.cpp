@@ -51,6 +51,7 @@ Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_exe
 
 void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm)
 {
+	if (sub_tasks.empty()) return;
 	/// TODO: In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &sub_tasks = this->sub_tasks;
 	auto func = [&hypervisor, &comm, sub_tasks] 

@@ -21,7 +21,7 @@ namespace parser
 	 *
 	 * Parses the yaml string and generates a task object.
 	 */
-	std::unique_ptr<Task> str_to_task(const std::string &str);
+	Task str_to_task(const std::string &str);
 
 	/**
 	 * \brief Convert results to yaml string.

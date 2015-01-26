@@ -7,7 +7,7 @@
 
 namespace parser {
 
-std::unique_ptr<Task> generate_start_task(const YAML::Node &node)
+Task generate_start_task(const YAML::Node &node)
 {
 	if (!node["vm-configurations"])
 		throw std::invalid_argument("No vm-configurations for start_task found.");
@@ -24,10 +24,10 @@ std::unique_ptr<Task> generate_start_task(const YAML::Node &node)
 	}
 	bool concurrent_execution = node["concurrent_execution"] ? 
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
-	return std::unique_ptr<Task>(new Task(std::move(start_tasks), concurrent_execution));
+	return Task(std::move(start_tasks), concurrent_execution);
 }
 
-std::unique_ptr<Task> generate_stop_task(const YAML::Node &node)
+Task generate_stop_task(const YAML::Node &node)
 {
 	if (!node["vm-configurations"])
 		throw std::invalid_argument("No vm-configurations for stop_task found.");
@@ -42,10 +42,10 @@ std::unique_ptr<Task> generate_stop_task(const YAML::Node &node)
 	}
 	bool concurrent_execution = node["concurrent_execution"] ? 
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
-	return std::unique_ptr<Task>(new Task(std::move(stop_tasks), concurrent_execution));
+	return Task(std::move(stop_tasks), concurrent_execution);
 }
 
-std::unique_ptr<Task> generate_migrate_task(const YAML::Node &node)
+Task generate_migrate_task(const YAML::Node &node)
 {
 	if (!node["vm-name"] || !node["destination"] || !node["parameter"] || !node["parameter"]["live-migration"])
 		throw std::invalid_argument("Invalid vm-config in migrate_task found.");
@@ -56,10 +56,10 @@ std::unique_ptr<Task> generate_migrate_task(const YAML::Node &node)
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
 	std::vector<std::shared_ptr<Sub_task>> migrate_tasks;
 	migrate_tasks.emplace_back(new Migrate(vm_name, destination, live_migration, false));
-	return std::unique_ptr<Task>(new Task(std::move(migrate_tasks), concurrent_execution));
+	return Task(std::move(migrate_tasks), concurrent_execution);
 }
 
-std::unique_ptr<Task> str_to_task(const std::string &str)
+Task str_to_task(const std::string &str)
 {
 	YAML::Node node = YAML::Load(str);
 	if (node["task"]) {
@@ -75,7 +75,7 @@ std::unique_ptr<Task> str_to_task(const std::string &str)
 			throw std::invalid_argument("Unknown task_name.");
 	} else if (node["result"]) {
 		LOG_PRINT(LOG_DEBUG, "Parsing result...");
-		return std::unique_ptr<Task>();
+		return Task();
 	} else {
 		throw std::invalid_argument("Unknown message type.");
 	}
