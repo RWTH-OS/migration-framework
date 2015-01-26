@@ -1,4 +1,3 @@
-# TODO: Find libmosquittopp.
 # TODO: Write installation of daemon.
 # TODO: Create automatic documentation generation target.
 
@@ -41,9 +40,20 @@ list(APPEND LIBS "${YAMLCPP_LIBRARIES}")
 include_directories("${YAMLCPP_INCLUDEDIR}")
 
 # Find mosquitto
-#TODO: Implementation of find_package module for mosquitto
-list(APPEND LIBS "mosquittopp")
-list(APPEND LIBS "mosquitto")
+find_package(Mosquittopp REQUIRED)
+if(MOSQUITTOPP_FOUND)
+	include_directories(${MOSQUITTOPP_INCLUDE_DIR})
+	list(APPEND LIBS "${MOSQUITTOPP_LIBRARY}")
+else()
+	message(FATAL_ERROR "mosquittopp is required.")
+endif()
+find_package(Mosquitto REQUIRED)
+if(MOSQUITTO_FOUND)
+	include_directories(${MOSQUITTO_INCLUDE_DIR})
+	list(APPEND LIBS "${MOSQUITTO_LIBRARY}")
+else()
+	message(FATAL_ERROR "mosquitto is required.")
+endif()
 
 # Find libvirt
 #TODO: Implementation of find_package module for libvirt
