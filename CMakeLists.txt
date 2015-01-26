@@ -1,10 +1,10 @@
-# TODO: Find yaml-cpp library.
 # TODO: Find libmosquittopp.
 # TODO: Write installation of daemon.
 # TODO: Create automatic documentation generation target.
 
 cmake_minimum_required(VERSION 2.6)
 project(migration-framework)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
 # Define version number
 set(MIGFRA_VERSION_MAJOR "0")
@@ -12,14 +12,14 @@ set(MIGFRA_VERSION_MINOR "1")
 set(MIGFRA_VERSION_PATCH "0")
 set(MIGFRA_VERSION "${MIGFRA_VERSION_MAJOR}.${MIGFRA_VERSION_MINOR}.${MIGFRA_VERSION_PATCH}")
 
-# Define logging method (TODO: find installed logging system)
+### Define logging method (TODO: find installed logging system)
 # Choose only one:
 #set(LOG_USE_NONE 1)
 #set(LOG_USE_STDOUT 1)
 #set(LOG_USE_SYSLOG 1)
 set(LOG_USE_SYSTEMD 1)
 
-# Set compiler flags
+#### Set compiler flags
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" CXX11_SUPPORTED)
 CHECK_CXX_COMPILER_FLAG("-std=c++0x" CXX0X_SUPPORTED)
@@ -28,12 +28,34 @@ if(CXX11_SUPPORTED)
 elseif(CXX0X_SUPPORTED)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 else()
-	message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support.")
+	message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support.")
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 
-# Define source files.
+### Find libraries
+# Find yaml-cpp
+find_package(PkgConfig)
+pkg_check_modules(YAMLCPP REQUIRED yaml-cpp)
+list(APPEND LIBS "${YAMLCPP_LIBRARIES}")
+include_directories("${YAMLCPP_INCLUDEDIR}")
+
+# Find mosquitto
+#TODO: Implementation of find_package module for mosquitto
+list(APPEND LIBS "mosquittopp")
+list(APPEND LIBS "mosquitto")
+
+# Find libvirt
+#TODO: Implementation of find_package module for libvirt
+list(APPEND LIBS "virt")
+
+# Find systemd (if necessary)
+#TODO: Implementation of find_package module for systemd
+if(${LOG_USE_SYSTEMD})
+	list(APPEND LIBS "systemd")
+endif()
+
+### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/mqtt_communicator.cpp
 	${PROJECT_SOURCE_DIR}/src/parser.cpp
@@ -41,7 +63,7 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 )
-
+### Add config files
 # Doxygen documentation generation
 configure_file(
 	"${PROJECT_SOURCE_DIR}/Doxyfile.in"
@@ -63,11 +85,8 @@ configure_file(
 	@ONLY
 )
 
+### Build and installation targets
 # Add executable
 add_executable(migfra ${SRC})
 
-if(${LOG_USE_SYSTEMD})
-	target_link_libraries(migfra systemd)
-	#elseif(${LOG_USE_SYSLOG})
-endif()
-target_link_libraries(migfra mosquittopp mosquitto yaml-cpp virt)
+target_link_libraries(migfra ${LIBS})
