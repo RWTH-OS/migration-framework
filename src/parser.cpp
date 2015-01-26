@@ -1,6 +1,7 @@
 #include "parser.hpp"
 
 #include "task.hpp"
+#include "mqtt_communicator.hpp"
 #include "logging.hpp"
 
 #include <stdexcept>
@@ -94,6 +95,20 @@ std::string results_to_str(const std::vector<Result> &results)
 		node["list"].push_back(sub_node);
 	}
 	return "---\n" + YAML::Dump(node) + "\n...";
+}
+
+
+std::shared_ptr<Communicator> str_to_communicator(const std::string &str)
+{
+	YAML::Node node = YAML::Load(str);
+	if (!node["id"] || !node["topic"] || !node["host"] || !node["port"] || !node["keepalive"])
+		throw std::invalid_argument("Defective configuration for communicator.");
+	return std::make_shared<MQTT_communicator>(
+			node["id"].as<std::string>(),
+			node["topic"].as<std::string>(),
+			node["host"].as<std::string>(),
+			node["port"].as<int>(),
+			node["keepalive"].as<int>());
 }
 
 } // namespace parser

@@ -9,12 +9,17 @@
 
 #include <string>
 #include <exception>
+#include <fstream>
+#include <sstream>
 
 Task_handler::Task_handler() : 
-	comm(new MQTT_communicator("test-id", "topic1", "localhost", 1883, 60)),
-	hypervisor(new Libvirt_hypervisor()),
+	hypervisor(std::make_shared<Libvirt_hypervisor>()),
 	running(true)
 {
+	std::ifstream file_stream("migfra.conf");
+	std::stringstream string_stream;
+	string_stream << file_stream.rdbuf();
+	comm = parser::str_to_communicator(string_stream.str());
 }
 
 

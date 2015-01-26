@@ -56,6 +56,13 @@ configure_file(
 )
 include_directories("${PROJECT_BINARY_DIR}")
 
+# Add migfra.conf as runtime configuration file.
+configure_file(
+	"${PROJECT_SOURCE_DIR}/src/migfra.conf.in"
+	"${PROJECT_BINARY_DIR}/migfra.conf"
+	@ONLY
+)
+
 # Add executable
 add_executable(migfra ${SRC})
 
