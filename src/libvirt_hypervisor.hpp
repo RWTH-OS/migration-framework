@@ -23,9 +23,6 @@ private:
 	void migrate_task();
 
 	virConnectPtr local_host_conn;	
-	unsigned int thread_counter;
-	std::mutex thread_counter_mutex;
-	std::condition_variable thread_counter_cv;
 };
 
 #endif

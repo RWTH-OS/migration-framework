@@ -10,6 +10,7 @@ class Task_handler
 {
 public:
 	Task_handler();
+	~Task_handler();
 	void loop();
 private:
 	std::shared_ptr<Communicator> comm;

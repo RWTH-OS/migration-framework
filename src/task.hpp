@@ -20,6 +20,7 @@
  * A condition variable is used to wait for the counter to become zero.
  * 
  * TODO: Move static member variables to seperate class to provide multiple thread counters.
+ * TODO: Proper testing.
  */
 class Thread_counter
 {

@@ -4,6 +4,7 @@
 #include "logging.hpp"
 #include "libvirt_hypervisor.hpp"
 #include "parser.hpp"
+#include "task.hpp"
 
 #include <mosquittopp.h>
 
@@ -20,6 +21,11 @@ Task_handler::Task_handler() :
 	std::stringstream string_stream;
 	string_stream << file_stream.rdbuf();
 	comm = parser::str_to_communicator(string_stream.str());
+}
+
+Task_handler::~Task_handler()
+{
+	Thread_counter::wait_for_threads_to_finish();
 }
 
 

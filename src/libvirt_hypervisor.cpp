@@ -18,9 +18,6 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
-	std::unique_lock<std::mutex> lock(thread_counter_mutex);
-	while (thread_counter != 0)
-		thread_counter_cv.wait(lock);
 	if (!virConnectClose(local_host_conn))
 		LOG_PRINT(LOG_WARNING, "Some qemu connections have not been closed after destruction of hypervisor wrapper!");
 }

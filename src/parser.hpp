@@ -11,7 +11,7 @@
 #include <string>
 
 /**
- * \brief Namespace for parsing function.
+ * \brief Namespace for parsing functions.
  *
  * This namespace contains functions to parse and generate yaml strings.
  */
