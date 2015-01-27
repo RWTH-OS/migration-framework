@@ -11,12 +11,12 @@ set(MIGFRA_VERSION_MINOR "1")
 set(MIGFRA_VERSION_PATCH "0")
 set(MIGFRA_VERSION "${MIGFRA_VERSION_MAJOR}.${MIGFRA_VERSION_MINOR}.${MIGFRA_VERSION_PATCH}")
 
-### Define logging method (TODO: find installed logging system)
-# Choose only one:
+### Define logging method
+# Choose one else logging system is determined automatically.
 #set(LOG_USE_NONE 1)
 #set(LOG_USE_STDOUT 1)
 #set(LOG_USE_SYSLOG 1)
-set(LOG_USE_SYSTEMD 1)
+#set(LOG_USE_SYSTEMD 1)
 
 #### Set compiler flags
 include(CheckCXXCompilerFlag)
@@ -33,6 +33,21 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 
 ### Find libraries
+# Find logging system
+# TODO: Try to find syslog.
+if(NOT LOG_USE_NONE OR NOT LOG_USE_STDOUT OR NOT LOG_USE_SYSLOG)
+	find_package(SystemdJournal)
+	if(LIBSYSTEMD_JOURNAL_FOUND)
+		include_directories(${LIBSYSTEMD_JOURNAL_INCLUDE_DIR})
+		list(APPEND LIBS "${LIBSYSTEMD_JOURNAL_LIBRARY}")
+		set(LOG_USE_SYSTEMD 1)
+	elseif(LOG_USE_SYSTEMD)
+		message(FATAL_ERROR "systemd journal is required.")
+	else()
+		set(LOG_USE_STDOUT 1)
+	endif()
+endif()
+
 # Find yaml-cpp
 find_package(YamlCpp REQUIRED)
 if(YAMLCPP_FOUND)
