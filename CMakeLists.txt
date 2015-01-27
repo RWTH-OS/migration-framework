@@ -34,12 +34,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 
 ### Find libraries
 # Find yaml-cpp
-find_package(PkgConfig)
-pkg_check_modules(YAMLCPP REQUIRED yaml-cpp)
-list(APPEND LIBS "${YAMLCPP_LIBRARIES}")
-include_directories("${YAMLCPP_INCLUDEDIR}")
+find_package(YamlCpp REQUIRED)
+if(YAMLCPP_FOUND)
+	include_directories(${YAMLCPP_INCLUDE_DIR})
+	list(APPEND LIBS "${YAMLCPP_LIBRARY}")
+else()
+	message(FATAL_ERROR "yaml-cpp is required.")
+endif()
 
-# Find mosquitto
+# Find mosquittopp
 find_package(Mosquittopp REQUIRED)
 if(MOSQUITTOPP_FOUND)
 	include_directories(${MOSQUITTOPP_INCLUDE_DIR})
@@ -47,6 +50,8 @@ if(MOSQUITTOPP_FOUND)
 else()
 	message(FATAL_ERROR "mosquittopp is required.")
 endif()
+
+# Find mosquitto
 find_package(Mosquitto REQUIRED)
 if(MOSQUITTO_FOUND)
 	include_directories(${MOSQUITTO_INCLUDE_DIR})
