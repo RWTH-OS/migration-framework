@@ -45,7 +45,6 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 {
 	virDomainPtr d1 = virDomainLookupByName(local_host_conn, vm_name.c_str());
 	std::unique_ptr<virDomain, decltype(&virDomainFree)> domain(d1, virDomainFree);
-	//std::unique_ptr<virDomain> domain(virDomainLookupByName(local_host_conn, vm_name.c_str()), virDomainFree);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
 	std::unique_ptr<virDomainInfo> domain_info(new virDomainInfo);
@@ -61,7 +60,6 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 {
 	virDomainPtr d1 = virDomainLookupByName(local_host_conn, vm_name.c_str());
 	std::unique_ptr<virDomain, decltype(&virDomainFree)> domain(d1, virDomainFree);
-	//std::unique_ptr<virDomain> domain(virDomainLookupByName(local_host_conn, vm_name.c_str()), virDomainFree);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
 	std::unique_ptr<virDomainInfo> domain_info(new virDomainInfo);
@@ -71,15 +69,12 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 		throw std::runtime_error("Domain not running.");
 	virConnectPtr c1 = virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str());
 	std::unique_ptr<virConnect, decltype(&virConnectClose)> dest_connection(c1, virConnectClose);
-	//std::unique_ptr<virConnect> dest_connection(
-	//		virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str()),
-	//		virConnectClose);
 	if (!dest_connection)
 		throw std::runtime_error("Cannot establish connection to " + dest_hostname);
 	unsigned long flags = 0;
-	flags |= live_migration ? VIR_MIGRATE_LIVE : VIR_MIGRATE_OFFLINE;
-	virDomainPtr d2 = virDomainLookupByName(dest_connection.get(), vm_name.c_str());
+	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;
+	virDomainPtr d2 = virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, 0, 0);
 	std::unique_ptr<virDomain, decltype(&virDomainFree)> dest_domain(d2, virDomainFree);
 	if (!dest_domain)
-		throw std::runtime_error("Cannot establish connection to " + dest_hostname);
+		throw std::runtime_error("Migration failed.");
 }
