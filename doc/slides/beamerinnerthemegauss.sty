@@ -1,0 +1,159 @@
+% Copyright 2007 by Till Tantau
+%
+% This file may be distributed and/or modified
+%
+% 1. under the LaTeX Project Public License and/or
+% 2. under the GNU Public License.
+%
+% See the file doc/licenses/LICENSE for more details.
+
+\ProvidesPackageRCS $Header: beamerinnerthemegauss.sty,v 1.4 2007/07/23 20:48:30 tantau Exp $
+
+\RequirePackage{marvosym}           % for \MVRightArrow (used in: itemize subitem)
+%\RequirePackage{enumitem}           % for \MVRightArrow (used in: itemize subitem)
+
+\mode<presentation>
+
+%% 
+%% Title Page Layout
+%%
+\defbeamertemplate*{title page}{gauss theme}
+{
+	\begin{tikzpicture}[remember picture, overlay]
+		\coordinate (titlePos) at ($(current page.west)+(1.3cm,.1*\paperheight)$);
+
+		% Gauss Logo 
+		\node [
+			anchor=north east, 
+			inner sep=0,
+			outer sep=0] (gaussLogo) at ($(current page.north east)-(.75cm, 0.5cm)$) {\insertlogo};
+
+		% Title
+		\node [
+			anchor=west,
+			align=left,
+			font=\bfseries\large,
+			text={gaussblue},
+		] (title) at (titlePos) {\inserttitle};
+		\node [
+			anchor=north west,
+			align=left,
+			font=\bfseries\normalsize,
+			text={gaussgray},
+		] (subtitle) at ($(title.south west)-(0,2ex)$) {\insertsubtitle};
+		\node [
+			circle,
+			fill=gaussblue,
+			minimum width=2cm
+		] at ($(current page.north west)!(title.west)!(current page.south west)-(.2cm, 0)$) {};
+
+
+		\node [
+			ellipse,
+			fill=gaussblue,
+			minimum width=\paperwidth-1cm,
+			minimum height=.66*\paperheight-.5cm,
+		] at ($(current page.south east)!(gaussLogo.south west)!(current page.south west)+(1cm, 0)$) {};
+
+		% bottom right 
+		\begin{scope}[
+				outer sep=0,
+				text={white},
+				align=right,
+				anchor=south east,
+			]
+			\node [
+				font=\bfseries\footnotesize,
+			] (date) at ($(current page.south east)+(-.5cm, .3cm)$) {\insertdate};
+			\node [
+				font=\bfseries\footnotesize,
+			] (author) at ($(date.north east)+(0, \parskip)$) {\insertauthor};
+			\node [
+				font=\bfseries\small,
+			] (affiliation) at ($(author.north east)+(0,\parskip)$) {\insertinstitute};
+		\end{scope}
+
+		% Institute/Project logo
+		\node [
+			outer sep=0,
+			anchor=south west,
+		] (instLogo) at ($(current page.south west)+(.5cm, .3cm)$) {\printinstlogo};
+	\end{tikzpicture}
+}
+
+
+%% 
+%% List Layout
+%% (this is typographically inelegant, but it is according to the provided layout)
+%%
+%1st Layer: Square
+\defbeamertemplate{itemize item}{layerOne}{\scriptsize$\bullet$}
+\setbeamertemplate{itemize item}[layerOne]
+
+% 2nd Layer: Three bars
+\defbeamertemplate{itemize subitem}{layerTwo}{\tiny$\bullet$}
+\setbeamertemplate{itemize subitem}[layerTwo]
+
+% 3rd Layer: Two bars
+\defbeamertemplate{itemize subsubitem}{layerThree}{\tiny$\bullet$}
+\setbeamertemplate{itemize subsubitem}[layerThree]
+
+% 4th Layer: Center dot 
+\defbeamertemplate{itemize subsubsubitem}{dot}{\tiny$\bullet$}
+\setbeamertemplate{itemize subsubsubitem}[dot]
+
+\AtBeginSection[] % Do nothing for \section*
+{
+	\begin{frame}<beamer>
+	\begin{tikzpicture}[remember picture, overlay]
+		\node[
+			fill=white,
+			anchor=north west,
+			minimum height=3cm,
+			minimum width=3cm,
+		] at ($(current page.north west)-(1ex, 0)$) {};
+
+		\node [
+			circle,
+			fill=gaussblue,
+			minimum width=2cm
+		] (circ) at ($(current page.south west)!.4!(current page.north west)-(.4cm, 0)$) {};
+		\node [
+			text={gaussblue},
+			anchor=west,
+		] at ($(circ.east)+(1em, 0)$) {\usebeamerfont{section}\insertsection};
+
+	\end{tikzpicture}
+	\end{frame}
+}
+
+\AtBeginDocument
+{
+	\iflanguage{ngerman}{\pdfbookmark[2]{Titelseite}{title}}{}
+	\iflanguage{english}{\pdfbookmark[2]{Title page}{title}}{}
+
+	\frame{\titlepage}
+}
+
+%% 
+%% Table of Content Layout
+%%
+\RequirePackage{etoolbox}
+\patchcmd{\beamer@sectionintoc}
+	{\vfill}
+	{\vskip\itemsep\vskip\itemsep}
+	{}
+	{}
+
+\defbeamertemplate{section in toc}{sectiontemp}{%
+	\color{gaussblue}\inserttocsection%
+}
+\setbeamertemplate{section in toc}[sectiontemp]
+\defbeamertemplate{subsection in toc}{subsectiontemp}{%
+	\small\vspace{.5ex}\leftskip=1em%
+	~~\inserttocsubsection\par%
+}
+\setbeamertemplate{subsection in toc}[subsectiontemp]
+
+\mode<all>
+

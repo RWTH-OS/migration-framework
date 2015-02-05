@@ -1,0 +1,114 @@
+% Copyright 2007 by Till Tantau
+% Copyright 2009 by Rainer Finocchiaro
+% Copyright 2012 by Georg Wassen
+%
+% This file may be distributed and/or modified
+%
+% 1. under the LaTeX Project Public License and/or
+% 2. under the GNU Public License.
+%
+% See the file doc/licenses/LICENSE for more details.
+
+\ProvidesPackageRCS $Header: beamerthemegauss.sty,v 0.1 2012/12/13 wassen Exp $
+
+\RequirePackage{xspace}                             % for \xspace
+%%
+%% Use Arial as default font
+%%
+\usepackage{helvet}
+\renewcommand{\familydefault}{phv} 
+
+%%\setbeamersize{text margin left=.6cm}
+%%
+%% include RWTH logo (for header)
+%%
+\logo{\includegraphics[height=1.25cm]{logos/gauss}}
+
+
+%%
+%% add new commands to set web and email address
+%% (and, optionally, institute logo
+%%
+\newcommand*{\webaddress}[1]{}
+\newcommand*{\printwebaddress}{www.rwth-aachen.de}
+\renewcommand*{\webaddress}[1]{\renewcommand*{\printwebaddress}{#1}}
+
+\newcommand*{\email}[1]{}
+\newcommand*{\printemail}{}
+\renewcommand*{\email}[1]{\renewcommand*{\printemail}{\href{mailto:#1}{#1}\xspace}}
+
+\newcommand*{\instlogo}[1]{}
+\newcommand*{\printinstlogo}{}
+\renewcommand*{\instlogo}[1]{\renewcommand*{\printinstlogo}{\includegraphics[height=6mm]{#1}}}
+
+\newcommand*{\affiliation}[1]{}
+\newcommand*{\printaffiliation}{%
+	Institute for Automation of Complex Power Systems\\%
+	E.ON Energy Research Center, RWTH Aachen University\\%
+	Mathieustra{\ss}e 10\\%
+    52074 Aachen}
+\renewcommand*{\affiliation}[1]{\renewcommand*{\printaffiliation}{#1}}
+
+%%
+%% the '\lastpage' command may be used to insert a 'running-out' slide
+%%
+\newcommand*{\lastpage}{
+	\setbeamertemplate{navigation symbols}{}
+	\begin{frame}[plain, t]
+	\begin{tikzpicture}[remember picture, overlay]
+		\node [
+			anchor=south east
+		] (gaussLogoFooter) at ($(current page.south east)+(-.44cm, .34cm)$) {%
+			\includegraphics[height=.9cm]{logos/gauss}
+		};
+		\node [
+			anchor=north east,
+		] at ($(current page.north east)+(-.44cm, -.34cm)$) {%
+			\printinstlogo
+		};
+	\end{tikzpicture}	
+    
+	\vspace{4cm}
+    \scriptsize
+    \protect\iflanguage{ngerman}{Vielen Dank f\"ur Ihre Aufmerksamkeit!}{}
+    \protect\iflanguage{english}{Thank you for your kind attention!}{}
+
+
+    \vspace{4ex}
+    \textbf{\insertauthor}\ifx\printemail\@empty\else{~--~{\color{gaussblue}\printemail}}\fi
+
+    \vspace{2ex}
+	\printaffiliation
+
+    \vspace{2ex}
+	{\color{gaussblue}\url{\printwebaddress}}
+	\end{frame}
+}
+
+\mode<presentation>
+
+% Define some lengths
+\newlength{\footlineHeight}
+\setlength{\footlineHeight}{.85cm}
+\newlength{\headlineHeight}
+\setlength{\headlineHeight}{1.28cm}
+
+% Define some commands
+%%\let\oldtoc\tableofcontents
+%%\renewcommand*{\tableofcontents}{%
+%%	\vfill
+%%	\vspace*{2ex}
+%%	\oldtoc
+%%}
+
+%%
+%% include the other style files of the gauss theme
+%%
+
+\usefonttheme{gauss}         % beamerfontthemerwth.sty
+\usecolortheme{gauss}        % beamercolorthemerwth.sty
+\useoutertheme{gauss}        % beamerouterthemerwth.sty
+\useinnertheme{gauss}        % beamerinnerthemerwth.sty
+
+\mode<all>
+

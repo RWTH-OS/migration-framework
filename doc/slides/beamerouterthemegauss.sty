@@ -1,0 +1,95 @@
+\ProvidesPackageRCS $Header: beamerouterthemeeonerc.sty,v 1.9 2007/07/16 20:48:30 tantau Exp $
+\RequirePackage{calc}       % needed for calculations of lengths
+
+\mode<presentation>
+
+\newlength{\leftMargin}
+\setlength{\leftMargin}{1cm+.5ex}
+\setbeamersize{sidebar width right=0mm}         % no right sidebar.
+\setbeamersize{text margin right=1.9em}
+\setbeamersize{text margin left=\leftMargin}
+
+% no sidebars
+\defbeamertemplate*{sidebar right}{gauss theme}{}
+\defbeamertemplate*{sidebar left}{gauss theme}{}
+
+
+\defbeamertemplate*{frametitle}{rwth theme}[1][left]{}
+
+
+%%
+%% Definition of the headline
+%%
+\defbeamertemplate*{headline}{gauss theme}[1][left]
+{
+	\ifnum \insertpagenumber=1
+	\else
+	\leavevmode%
+	\begin{beamercolorbox}[sep=0cm,ht=2cm, wd=\beamer@leftmargin]{}
+	\end{beamercolorbox}%
+	\begin{tikzpicture}[remember picture, overlay]
+		\node [
+			anchor=north west,
+			text={gaussblue},
+			font=\bfseries\large,
+			align=left,
+		] (frametitle) at ($(current page.north west)+(1cm,-1.5cm)+(0, .5ex)$) {\insertframetitle};
+		\node [
+			circle,
+			fill=gaussblue,
+			minimum width=2cm
+		] at ($(current page.north west)!(frametitle.north west)!(current page.south west)-(.4cm, 1.5ex)$) {};
+
+	\end{tikzpicture}
+	\fi
+}
+
+
+%%
+%% Definition of the footline
+%%
+\defbeamertemplate*{footline}{rwth theme}
+{
+	\ifnum \insertpagenumber=1
+	\else
+	\leavevmode%
+	\begin{tikzpicture}[remember picture, overlay]
+
+		% RWTH logo
+		\node [anchor=south east] (gaussLogoFooter) at ($(current page.south east)+(-.5cm, .4cm)$) {\includegraphics[height=.9cm]{logos/gauss}};
+
+		% framenumber
+		\node [anchor=south east] (framenumber) at %
+			($(current page.south west)!(gaussLogoFooter.south)!(current page.north west)+(1cm,0)$) 
+			{%
+				\usebeamerfont{footer}%
+				\usebeamercolor[fg]{footer}{\insertframenumber}%
+			};
+
+		% date
+		\node [anchor=south west] (date) at %
+		($(current page.south west)!(gaussLogoFooter.south)!(current page.north west)+(.5*\paperwidth+.5cm,0)$) 
+		{%
+			\usebeamerfont{footer}%
+			\usebeamercolor[fg]{footer}{\insertdate}%
+		};
+	
+		% author
+		\node [
+			anchor=west,
+			] (author) at %
+			($(framenumber.east)+(1.5cm, 0)$) 
+			{%
+				\usebeamerfont{footer}%
+				\usebeamercolor[fg]{footer}{\insertshortauthor}%
+			};
+		
+	\end{tikzpicture}
+	\hbox{%
+	\begin{beamercolorbox}[sep=0cm,ht=1.1cm, wd=\beamer@leftmargin]{}
+	\end{beamercolorbox}%
+	}
+	\fi
+}
+
+\mode<all>

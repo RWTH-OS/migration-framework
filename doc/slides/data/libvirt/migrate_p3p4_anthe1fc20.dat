@@ -1,0 +1,23 @@
+# Host 1: pandora3
+# Host 2: pandora4
+# Guest: anthe1fc20
+# CPU: Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
+# CC: gcc 4.8.3
+# Host Kernels: 3.15.10-201.fc20.x86_64
+# Guest Kernels: 3.15.10-201.fc20.x86_64
+# Host Distro: Fedora 20 
+# Guest Distro: Fedora 20
+# Guest image format: qcow2
+# Guest image size: 15 GiB
+# Host configured with SR-IOV
+# Migration rounds: 10
+mem_assigned 	cold 		cold_hotplug	
+134217728 	1.97		2.30
+268435456 	2.25		3.43
+536870912 	2.46 		3.83
+1073741824	2.57		4.33
+2147483648 	2.85   	   	5.17
+4294967296 	3.30	   	6.85	
+8589934592 	4.32		10.13	
+17179869184     6.15		16.63	
+34359738368  	9.80 		30.12

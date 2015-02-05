@@ -1,0 +1,409 @@
+%%
+%% if lualatex is not used, compile to PDF 1.4 (compatibility to Adobe Acrobat)
+%%
+\RequirePackage{ifluatex}
+\ifluatex
+\else
+	\RequirePackage{pdf14}
+\fi
+
+\documentclass[10pt, aspectratio=1610]{beamer}
+%%
+%% E.ON ERC Beamer Theme (layout based on E.ON ERC PowerPoint template)
+%% by Simon Pickartz, Institute for Automation of Complex Power Systems, 2014
+%%   spickartz@eonerc.rwth-aachen.de 
+%% based on RWTH Latex template 
+%% by Georg Wassen, Lehrstuhl für Betriebssysteme, 2013
+%%    wassen@lfbs.rwth-aachen.de
+%%
+%% The templates are derived from the beamer documentation and the provided 
+%% templates, hence, the same licence applies:
+%%
+%% ----------------------------------------------------------------
+%% |  This file may be distributed and/or modified                |
+%% |                                                              |
+%% |  1. under the LaTeX Project Public License and/or            |
+%% |  2. under the GNU Public License.                            |
+%% |                                                              |
+%% |  See the file doc/licenses/LICENSE for more details.         |
+%% ----------------------------------------------------------------
+%%
+%% Version 0.1    03/28/2014    Initial presentation using this theme
+%% Version 0.2    04/01/2014    First version to be published in the institute 
+%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Select input file encoding:
+%%   utf8   - UTF-8, nowadays standard on most operating sytems
+%%   latin1 - ISO-8859-1
+\usepackage[]{luainputenc}                 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Select language
+%%
+%\usepackage[ngerman]{babel} 				% Deutsch, neue Rechtschreibung
+\usepackage[english]{babel} 				% English
+
+\usetheme{gauss}
+
+%% Do NOT change the following three lines, unless you know what you are doing
+\usepackage[T1]{fontenc} 					% Font encoding
+\usepackage{lmodern} 						% Select Linux Modern Fonts
+\usepackage{graphicx} 						% needed to include graphics
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% import packages for content
+%%
+\usepackage{listings} 						% for lstlisting and \lstinline|..|
+%% TikZ can be used to /program/ graphics.
+\usepackage{tikz} 							% comment-out, if not needed 
+
+%% Some TikZ-libraries and settings for the examples...
+\usetikzlibrary{shadings} 					% GW: color gradients
+\usetikzlibrary{calc,%
+				positioning,%
+				fit,%
+				matrix,%
+				shadows,%
+				chains,%
+				arrows,%
+				shapes,%
+				spy,%
+				fadings}
+\usepackage{pgfplots}
+\usetikzlibrary{pgfplots.units,shapes.symbols,shapes.arrows}
+%\usetikzlibrary{pgfplots.external}
+%\tikzexternalize[prefix=tmp/]
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% configure title page and author information
+%%-------------------------------
+%% You can always provide a short version: \title[short]{long title}
+%%   title        -- Title of the presentation
+%%                   The title appears on the first page and may contain 
+%% 					 a line break: \\ 
+%%                   The short title appears in the footer line
+%%   subtitle     -- Appears below the title
+%%   titlegraphic -- Currently not supported
+%%   author       -- Name of the author(s)
+%%   email        -- E-Mail address of author (optional)
+%%   institute    -- Name of the institution (e.g. chair)
+%%   webaddress   -- Web address (default is www.rwth-aachen.de), 
+%% 					 (see slide generated with \lastpage)
+%%   date         -- Date of the presentation 
+%% 					 (or use \date to insert the date of the PDF generation)
+%%   subject      -- This is only for the PDF meta data
+%%   keywords     -- This is only for the PDF meta data
+%%   logo         -- Logo, don't change (given by coporate identity templates)
+
+%\title[RWTH presentation template]{The E.ON ERC Latex \\ Presentation Template with Examples}
+%\subtitle{Subtitle}
+\usepackage{relsize}
+\newcommand{\fast}{F{\smaller A}ST }
+
+\title{Migration Framework}
+\subtitle{Work Package 2}
+\author{Simon Pickartz}
+\email{spickartz@eonerc.rwth-aachen.de} 							% optionally
+\institute[]{The \fast Project}
+\instlogo{logos/fast}
+\webaddress{www.eonerc.rwth-aachen.de} 						% overrides rwth-aachen.de 
+\date{03/05/2015}
+\subject{Migration Framework}          
+\keywords{migration, HPC, mqtt}
+% \instlogo{logos/acs}        % optionally
+
+
+\begin{document}
+
+%%
+%% Every slide is written in a frame environment (\begin{frame}...\end{frame}).
+%% You should provide a frame title after \begin{frame}.
+%%
+
+%%
+%% Table of contents (automatically collects all \section{} and \subsection{} entries).
+%% (run pdflatex multiple times to get all cross references correct)
+%%
+\begin{frame}{Agenda}
+	\tableofcontents
+\end{frame}
+
+\section{Architecture}
+\subsection{Overview}
+\begin{frame}{Overview}
+	\begin{itemize}
+		\item Hier koennte z.\,B. ein Schaubild hin, wie man mit dem Migrations-Framwork interagiert.
+		\item Eine zweite Folie könnte die Klassenstruktur etwas erklären und deutlich machen, was man benötigt um das Framwork in existierende andere Projekte zu integrieren
+	\end{itemize}
+\end{frame}
+
+\subsection{Features}
+\begin{frame}{Features}
+	\begin{itemize}
+		\item Welche funktionalität wird bereits unterstüzt? Was fehlt noch?
+		\item Auf weiteren Folien könntest du details zu Besonderheiten erklären.
+	\end{itemize}
+\end{frame}
+
+\section{Performance Results}
+\pgfplotstableread[col sep=space]{data/libvirt/migrate_p3p4_anthe1fc20.dat}\migrationTime
+\begin{frame}{Performance Results}
+	\begin{itemize}
+		\item Was kann man deiner Meinung nach alles Messen?
+		\item Wichtig sind vergleichbare Ergebnisse.
+			So solltest du dich z.\,B. für eine OS, Kernerl, Treiber, etc. Konfiguration entscheiden.
+		\item Auf der nächsten Folie habe ich dir mal ein Beispiel angehängt, wie man Graphen mit tikz erzeugen kann.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Migration Time}
+	\begin{center}
+		\begin{tikzpicture}
+%			\path[use as bounding box] (0em, -2em) rectangle (15em, 15em);
+			\tiny
+			\begin{semilogxaxis}[
+					height=\textheight,
+					width=.9\textwidth,
+					axis x line=bottom,
+					axis y line=left,
+					log basis x=2,
+					ymajorgrids=true,
+					legend style={font=\tiny},
+					legend cell align=left,
+%
+					legend pos=north west,
+					ymin=0, ymax=35,
+					xmin=134217728, xmax=51539607552,%34359738368,
+					xlabel={Memory in Byte}, 
+					ylabel={Migration time in s},
+					xtick={134217728  , 536870912  , 2147483648 , 8589934592 ,  34359738368},
+					xticklabels={,512\,Mi,2\,Gi,8\,Gi,32\,Gi},
+				]
+				\addplot [
+					thick, 
+					mark=*,
+					color=light,
+					mark color=light,
+				] table[x=mem_assigned,y=cold]{\migrationTime};
+				\addlegendentry{Migration only}
+				\addplot [
+					thick, 
+					mark=triangle*,
+					color=dark,
+					mark color=dark,
+				] table[x=mem_assigned,y=cold_hotplug]{\migrationTime};
+				\addlegendentry{With hotplug}
+			\end{semilogxaxis}
+		\end{tikzpicture}
+	\end{center}
+\end{frame}
+
+\section{Outlook}
+\begin{frame}{Outlook}
+	\begin{itemize}
+		\item Du kannst es auch ``Conclusion'' nennen
+		\item Hier kannst du noch einmal kurz zusammen fassen was bisher erreicht wurde und was noch fehlt.
+	\end{itemize}
+\end{frame}
+
+%%
+%% the final slide (contact information) can be generated with the following
+%% command
+%%
+\lastpage
+\appendix
+\section{Example slides}
+
+\begin{frame}{Title of the frame that may also go into the second line}
+	\begin{itemize}
+		\item Itemize list 
+		\item Itemize list
+			\begin{itemize}
+				\item Second layer 
+					\begin{itemize}
+						\item Third layer 
+					\end{itemize}
+			\end{itemize}
+		\item Itemize List 
+		\item Itemize List 
+			\begin{itemize}
+				\item Second layer
+			\end{itemize}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Title of a frame having paragraphs}
+	\begin{itemize}
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Frame with boxes}
+	\begin{block}{Block 1}
+		Content of the first block
+	\end{block}
+	\begin{block}{Another block}
+		Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+	\end{block}
+\end{frame}
+
+\section{More Examples}
+%% 
+%% If a \subsection{} is available, that one is used as first line of the frame title.
+%% 
+\subsection{A Subsection}
+
+\begin{frame}{How to set columns}
+  %%
+  %% The columns environment is provided by beamer, 
+  %% see "texdoc beamer", Sec. 12.7 'Splitting a Frame into Multiple Columns'
+  %%
+  %% parameter: c - center columns vertically
+  %%            t - align columns on the baseline of the first line
+  %%                don't use, if a column contains (only) a graphic! 
+  %%            T - align columns on the top of the first line (ok with graphics)
+  %%            b - align columns on the bottom line
+	\begin{columns}[T]
+	%% Each column must be given a with.
+	%% Should be given relative to \textwidth:
+		\begin{column}{.40\textwidth}
+			\begin{itemize}
+				\item Item 1
+				\item Item 2
+				\item Item 3
+				\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+			\end{itemize}
+		\end{column}
+		\begin{column}{.40\textwidth}
+	  %% here, \textwidth is the with of the current column
+			\includegraphics[width=.9\textwidth]{pictures/Tux}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+
+\begin{frame}{How to set columns (2)}
+	Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+	\begin{columns}[t]
+		\begin{column}{.35\textwidth}
+			\begin{itemize}
+				\item cat
+				\item dog
+				\item mouse
+				\item elephant
+			\end{itemize}
+		\end{column}
+		\begin{column}{.55\textwidth}
+			\begin{itemize}
+				\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+				\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+			\end{itemize}
+		\end{column}
+	\end{columns}
+
+	Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+\end{frame}
+
+\subsection{another subsection}
+
+\begin{frame}
+	This frame does not contain a (dedicated) frame title.
+\end{frame}
+
+\section{Examples with uncovering}
+
+\begin{frame}{Piecewise uncovering using pause}
+	Paragraphs and items can be uncovered easily with \texttt{\textbackslash pause}.
+	\pause
+	\begin{itemize}
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+			\pause
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+			\pause
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+			\pause
+		\item Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Fine grained control}
+	\begin{itemize}
+		\item<1-> First line
+		\item<2>  Second line (appears after first line, disappears again)
+		\item<3-4> Third line (appears before firth one)
+		\item<4-> Fourth line
+		\item<5-> Fifth line
+	\end{itemize}
+	\onslide<6->{
+		Standard behavior with \texttt{\textbackslash onslide} is to keep its place, even if not displayed.
+	}
+
+	\only<7>{
+		With \texttt{\textbackslash only}, the element does not occupy place. This may lead to shifting other elements.
+	}
+\end{frame}
+
+\section{Quellcode}
+
+%% 
+%% This requires the package listings
+%%
+%% Slides containing lstlisting environments, \lstinline|..| or \verb|..|
+%% the option "fragile" must be provided!
+%%
+\begin{frame}[fragile]{Example-Code: Hallo Welt!}
+	\begin{lstlisting}[basicstyle=\ttfamily, language=C]
+	#include <stdio.h>
+
+	void main (void) {
+	    printf("Hallo Welt!\n");
+	}
+	\end{lstlisting}
+\end{frame}
+
+
+
+
+\section{TikZ example}
+
+%% 
+%% This requires the package tikz
+%%
+%% The animation uses the same overlay specification<2-3> as the items or \onslide
+%%
+\begin{frame}{animated graphics}
+
+  % define some styles
+	\tikzstyle{format} = [draw, thin, fill=blue!20]
+	\tikzstyle{medium} = [ellipse, draw, thin, fill=green!20, minimum height=2.5em]
+
+	\begin{figure}
+		\begin{tikzpicture}[node distance=3cm, auto,>=latex', thick]
+	  % We need to set a bounding box first. Otherwise the diagram
+	  % will change position for each frame.
+			\path[use as bounding box] (-1,0) rectangle (10,-2);
+			\path[->]<1-> node[format] (tex) {.tex file};
+			\path[->]<2-> node[format, right of=tex] (dvi) {.dvi file}
+			(tex) edge node {\TeX} (dvi);
+			\path[->]<3-> node[format, right of=dvi] (ps) {.ps file}
+			node[medium, below of=dvi] (screen) {screen}
+			(dvi) edge node {dvips} (ps)
+			edge node[swap] {xdvi} (screen);
+			\path[->]<4-> node[format, right of=ps] (pdf) {.pdf file}
+			node[medium, below of=ps] (print) {printer}
+			(ps) edge node {ps2pdf} (pdf)
+			edge node[swap] {gs} (screen)
+			edge (print);
+			\path[->]<5-> (pdf) edge (screen)
+			edge (print);
+			\path[->, draw]<6-> (tex) -- +(0,1) -| node[near start] {pdf\TeX} (pdf);
+		\end{tikzpicture}
+	\end{figure}
+
+\end{frame}
+
+
+\end{document}
