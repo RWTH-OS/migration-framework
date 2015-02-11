@@ -54,7 +54,7 @@ Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_exe
 void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm)
 {
 	if (sub_tasks.empty()) return;
-	/// TODO: In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
+	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &sub_tasks = this->sub_tasks;
 	auto func = [&hypervisor, &comm, sub_tasks] 
 	{
@@ -79,7 +79,7 @@ Start::Start(const std::string &vm_name, size_t vcpus, size_t memory, bool concu
 
 std::future<Result> Start::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	auto &vm_name = this->vm_name; // In C++14 init capture should be used!
+	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
 	auto &vcpus = this->vcpus;
 	auto &memory = this->memory;
 	auto func = [&hypervisor, vm_name, vcpus, memory] () 
@@ -102,7 +102,7 @@ Stop::Stop(const std::string &vm_name, bool concurrent_execution) :
 
 std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	auto &vm_name = this->vm_name; // In C++14 init capture should be used!
+	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
 	auto func = [&hypervisor, vm_name] ()
 	{
 		try {
@@ -125,7 +125,7 @@ Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, b
 
 std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	auto &vm_name = this->vm_name; /// TODO: In C++14 init capture should be used!
+	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
 	auto &dest_hostname = this->dest_hostname;
 	auto &live_migration = this->live_migration;
 	auto func = [&hypervisor, vm_name, dest_hostname, live_migration] ()

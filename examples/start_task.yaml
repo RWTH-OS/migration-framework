@@ -1,10 +1,10 @@
 ---
 task: start vm
 vm-configurations: 
-  - name: vm1
+  - name: anthe1
     vcpus: 1
     memory: 1024
-  - name: vm2
+  - name: anthe2
     vcpus: 1
     memory: 512
 ...

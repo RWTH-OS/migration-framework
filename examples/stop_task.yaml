@@ -1,6 +1,6 @@
 ---
 task: stop vm
 vm-configurations:
-  - vm-name: vm1
-  - vm-name: vm2
+  - vm-name: anthe1
+  - vm-name: anthe2
 ...
