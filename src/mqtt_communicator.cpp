@@ -19,9 +19,9 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 {
 	LOG_PRINT(LOG_DEBUG, "Initializing MQTT_communicator...");
 	mosqpp::lib_init();
-	connect_async(host.c_str(), port, keepalive);
 	loop_start();
-	/// TODO: Move subscribe to a dedicated public method.
+	connect_async(host.c_str(), port, keepalive);
+	/// \todo Move subscribe to a dedicated public method.
 	subscribe(nullptr, topic.c_str(), 2);
 	LOG_PRINT(LOG_DEBUG, "MQTT_communicator initialized.");
 }

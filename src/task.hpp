@@ -58,6 +58,9 @@ struct Result
 	std::string status;
 };
 
+/**
+ * \brief An abstract class to provide an interface for a Sub_task.
+ */
 class Sub_task
 {
 public:

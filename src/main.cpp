@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
 {
 	getopt(argc, argv, "");
 	try {
-		Task_handler task_handler;
+		Task_handler task_handler("migfra.conf");
 		LOG_PRINT(LOG_DEBUG, "task_handler loop started.");
 		task_handler.loop();
 		LOG_PRINT(LOG_DEBUG, "task_handler loop closed.");
