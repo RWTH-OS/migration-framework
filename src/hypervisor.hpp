@@ -3,6 +3,11 @@
 
 #include <string>
 
+/**
+ * \brief An abstract class to provide an interface for the hypervisor.
+ *
+ * This interface provides methods to start, stop and migrate virtual machines.
+ */
 class Hypervisor
 {
 public:

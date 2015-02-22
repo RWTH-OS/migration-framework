@@ -4,9 +4,9 @@
 #include <string>
 
 /**
- * An abstract class to provide an interface for communication.
+ * \brief An abstract class to provide an interface for communication.
  *
- * \brief This interface provides a method to send messages and to get incoming messages.
+ * This interface provides a method to send messages and to get incoming messages.
  */
 class Communicator
 {
@@ -25,7 +25,7 @@ public:
 	 * \brief Method to get a message.
 	 *
 	 * A pure virtual method to provide an interface to receive a message.
-	 * This is a blocking method which waits for a new message.
+	 * This is a blocking method which waits for a message.
 	 */
 	virtual std::string get_message() = 0;
 };

@@ -6,13 +6,15 @@
 #include <cstdlib>
 
 MQTT_communicator::MQTT_communicator(const std::string &id, 
-				     const std::string &topic,
+				     const std::string &subscribe_topic,
+				     const std::string &publish_topic,
 				     const std::string &host, 
 				     int port,
 				     int keepalive) :
 	mosqpp::mosquittopp(id.c_str()),
 	id(id), 
-	topic(topic),
+	subscribe_topic(subscribe_topic),
+	publish_topic(publish_topic),
 	host(host), 
 	port(port),
 	keepalive(keepalive)
@@ -21,8 +23,7 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	mosqpp::lib_init();
 	loop_start();
 	connect_async(host.c_str(), port, keepalive);
-	/// \todo Move subscribe to a dedicated public method.
-	subscribe(nullptr, topic.c_str(), 2);
+	subscribe(nullptr, subscribe_topic.c_str(), 2);
 	LOG_PRINT(LOG_DEBUG, "MQTT_communicator initialized.");
 }
 
@@ -74,7 +75,7 @@ void MQTT_communicator::on_message(const mosquitto_message *msg)
 
 void MQTT_communicator::send_message(const std::string &message)
 {
-	int ret = publish(nullptr, topic.c_str(), message.size(), message.c_str(), 2, false);
+	int ret = publish(nullptr, publish_topic.c_str(), message.size(), message.c_str(), 2, false);
 	if (ret != MOSQ_ERR_SUCCESS)
 		throw std::runtime_error("Error sending message: Code " + std::to_string(ret));
 }

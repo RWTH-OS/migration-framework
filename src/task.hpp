@@ -104,7 +104,7 @@ public:
 	 * \brief Execute the task.
 	 *
 	 * Executes all sub_tasks.
-	 * Starts a new thread if concurrent_execution is true.
+	 * Starts a thread if concurrent_execution is true.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 * \param comm Communicator to be used to send results.
 	 */

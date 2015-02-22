@@ -21,7 +21,7 @@ Task generate_start_task(const YAML::Node &node)
 		size_t memory = iter["memory"].as<size_t>();
 		bool concurrent_execution = iter["concurrent_execution"] ? 
 			iter["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
-		start_tasks.emplace_back(new Start(name, vcpus, memory, concurrent_execution));
+		start_tasks.push_back(std::make_shared<Start>(name, vcpus, memory, concurrent_execution));
 	}
 	bool concurrent_execution = node["concurrent_execution"] ? 
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
@@ -39,7 +39,7 @@ Task generate_stop_task(const YAML::Node &node)
 		std::string vm_name = iter["vm-name"].as<std::string>();
 		bool concurrent_execution = iter["concurrent_execution"] ? 
 			iter["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
-		stop_tasks.emplace_back(new Stop(vm_name, concurrent_execution));
+		stop_tasks.push_back(std::make_shared<Stop>(vm_name, concurrent_execution));
 	}
 	bool concurrent_execution = node["concurrent_execution"] ? 
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
@@ -56,7 +56,7 @@ Task generate_migrate_task(const YAML::Node &node)
 	bool concurrent_execution = node["concurrent_execution"] ? 
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
 	std::vector<std::shared_ptr<Sub_task>> migrate_tasks;
-	migrate_tasks.emplace_back(new Migrate(vm_name, destination, live_migration, false));
+	migrate_tasks.push_back(std::make_shared<Migrate>(vm_name, destination, live_migration, false));
 	return Task(std::move(migrate_tasks), concurrent_execution);
 }
 
@@ -103,11 +103,13 @@ std::string results_to_str(const std::vector<Result> &results)
 std::shared_ptr<Communicator> str_to_communicator(const std::string &str)
 {
 	YAML::Node node = YAML::Load(str);
-	if (!node["id"] || !node["topic"] || !node["host"] || !node["port"] || !node["keepalive"])
+	if (!node["id"] || !node["subscribe-topic"] || !node["publish-topic"] 
+			|| !node["host"] || !node["port"] || !node["keepalive"])
 		throw std::invalid_argument("Defective configuration for communicator.");
 	return std::make_shared<MQTT_communicator>(
 			node["id"].as<std::string>(),
-			node["topic"].as<std::string>(),
+			node["subscribe-topic"].as<std::string>(),
+			node["publish-topic"].as<std::string>(),
 			node["host"].as<std::string>(),
 			node["port"].as<int>(),
 			node["keepalive"].as<int>());
