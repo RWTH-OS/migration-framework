@@ -47,9 +47,20 @@ public:
 	 */
 	void send_message(const std::string &message) override;
 	/**
+	 * \brief Send a message.
+	 */
+	void send_message(const std::string &message, const std::string &topic);
+	/**
 	 * \brief Get a message.
 	 */
 	std::string get_message() override;
+
+	/**
+	 * \brief Get a message.
+	 *
+	 * \param duration The time in milliseconds until timeout.
+	 */
+	std::string get_message(const std::chrono::duration<double> &duration);
 private:
 	/**
 	 * \brief Callback for established connections.

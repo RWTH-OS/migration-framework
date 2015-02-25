@@ -32,6 +32,13 @@ namespace parser
 	std::string results_to_str(const std::vector<Result> &result);
 
 	/**
+	 * \brief Convert yaml string to results.
+	 *
+	 * Parses a yaml string and generates a result vector.
+	 */
+	std::vector<Result> str_to_results(const std::string &result);
+
+	/**
 	 * \brief Convert yaml string to Communicator object.
 	 *
 	 * Parses a yaml string (e.g. the config file) and generates a Communicator.

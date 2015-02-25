@@ -40,6 +40,9 @@ if(NOT LOG_USE_NONE OR NOT LOG_USE_STDOUT OR NOT LOG_USE_SYSLOG)
 	if(LIBSYSTEMD_JOURNAL_FOUND)
 		include_directories(${LIBSYSTEMD_JOURNAL_INCLUDE_DIR})
 		list(APPEND LIBS "${LIBSYSTEMD_JOURNAL_LIBRARY}")
+		list(APPEND LIBS_BENCHMARK "${LIBSYSTEMD_JOURNAL_LIBRARY}")
+		list(APPEND LIBS "systemd")
+		list(APPEND LIBS_BENCHMARK "systemd")
 		set(LOG_USE_SYSTEMD 1)
 	elseif(LOG_USE_SYSTEMD)
 		message(FATAL_ERROR "systemd journal is required.")
@@ -53,8 +56,19 @@ find_package(YamlCpp REQUIRED)
 if(YAMLCPP_FOUND)
 	include_directories(${YAMLCPP_INCLUDE_DIR})
 	list(APPEND LIBS "${YAMLCPP_LIBRARY}")
+	list(APPEND LIBS_BENCHMARK "${YAMLCPP_LIBRARY}")
 else()
 	message(FATAL_ERROR "yaml-cpp is required.")
+endif()
+
+# Find boost
+find_package(Boost COMPONENTS program_options REQUIRED)
+if(Boost_FOUND)
+	include_directories(${Boost_INCLUDE_DIRS})
+	list(APPEND LIBS "${Boost_LIBRARIES}")
+	list(APPEND LIBS_BENCHMARK "${Boost_LIBRARIES}")
+else()
+	message(FATAL_ERROR "Boost::program_options is required.")
 endif()
 
 # Find mosquittopp
@@ -62,6 +76,7 @@ find_package(Mosquittopp REQUIRED)
 if(MOSQUITTOPP_FOUND)
 	include_directories(${MOSQUITTOPP_INCLUDE_DIR})
 	list(APPEND LIBS "${MOSQUITTOPP_LIBRARY}")
+	list(APPEND LIBS_BENCHMARK "${MOSQUITTOPP_LIBRARY}")
 else()
 	message(FATAL_ERROR "mosquittopp is required.")
 endif()
@@ -71,6 +86,7 @@ find_package(Mosquitto REQUIRED)
 if(MOSQUITTO_FOUND)
 	include_directories(${MOSQUITTO_INCLUDE_DIR})
 	list(APPEND LIBS "${MOSQUITTO_LIBRARY}")
+	list(APPEND LIBS_BENCHMARK "${MOSQUITTO_LIBRARY}")
 else()
 	message(FATAL_ERROR "mosquitto is required.")
 endif()
@@ -78,12 +94,6 @@ endif()
 # Find libvirt
 #TODO: Implementation of find_package module for libvirt
 list(APPEND LIBS "virt")
-
-# Find systemd (if necessary)
-#TODO: Implementation of find_package module for systemd
-if(${LOG_USE_SYSTEMD})
-	list(APPEND LIBS "systemd")
-endif()
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
@@ -93,6 +103,12 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 )
+set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
+	${PROJECT_SOURCE_DIR}/src/mqtt_communicator.cpp
+	${PROJECT_SOURCE_DIR}/src/parser.cpp
+	${PROJECT_SOURCE_DIR}/src/task.cpp
+)
+
 ### Add config files
 # Doxygen documentation generation
 configure_file(
@@ -118,5 +134,7 @@ configure_file(
 ### Build and installation targets
 # Add executable
 add_executable(migfra ${SRC})
+add_executable(migfra_benchmark ${SRC_BENCHMARK})
 
 target_link_libraries(migfra ${LIBS})
+target_link_libraries(migfra_benchmark ${LIBS_BENCHMARK})

@@ -5,6 +5,7 @@
 #include "logging.hpp"
 
 #include <stdexcept>
+#include <iostream>
 
 namespace parser {
 
@@ -97,6 +98,22 @@ std::string results_to_str(const std::vector<Result> &results)
 		node["list"].push_back(sub_node);
 	}
 	return "---\n" + YAML::Dump(node) + "\n...";
+}
+
+std::vector<Result> str_to_results(const std::string &str)
+{
+	YAML::Node node = YAML::Load(str);
+	if (!node["result"] || !node["list"])
+		throw std::invalid_argument("Invalid result string.");
+	std::vector<Result> results;
+	for (const auto &iter : node["list"]) {
+		if (!iter["vm-name"] || !iter["status"])
+			throw std::invalid_argument("Invalid result list.");
+		results.emplace_back(node["result"].as<std::string>(),
+				iter["vm-name"].as<std::string>(),
+				iter["status"].as<std::string>());
+	}
+	return results;
 }
 
 

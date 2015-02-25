@@ -1,0 +1,7 @@
+---
+task: migrate start
+vm-name: vm-name-placeholder
+destination: destination-placeholder
+parameter:
+  live-migration: live-migration-placeholder
+...

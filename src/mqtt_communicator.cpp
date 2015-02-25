@@ -75,7 +75,12 @@ void MQTT_communicator::on_message(const mosquitto_message *msg)
 
 void MQTT_communicator::send_message(const std::string &message)
 {
-	int ret = publish(nullptr, publish_topic.c_str(), message.size(), message.c_str(), 2, false);
+	send_message(message, publish_topic);
+}
+
+void MQTT_communicator::send_message(const std::string &message, const std::string &topic)
+{
+	int ret = publish(nullptr, topic.c_str(), message.size(), message.c_str(), 2, false);
 	if (ret != MOSQ_ERR_SUCCESS)
 		throw std::runtime_error("Error sending message: Code " + std::to_string(ret));
 }
@@ -86,6 +91,21 @@ std::string MQTT_communicator::get_message()
 	std::unique_lock<std::mutex> lock(msg_queue_mutex);
 	while (messages.empty())
 		msg_queue_empty_cv.wait(lock);
+	mosquitto_message *msg = messages.front();
+	messages.pop();
+	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
+	mosquitto_message_free(&msg);
+	LOG_PRINT(LOG_DEBUG, "Message received.");
+	return buf;
+}
+
+std::string MQTT_communicator::get_message(const std::chrono::duration<double> &duration)
+{
+	LOG_PRINT(LOG_DEBUG, "Wait for message.");
+	std::unique_lock<std::mutex> lock(msg_queue_mutex);
+	while (messages.empty())
+		if (msg_queue_empty_cv.wait_for(lock, duration) == std::cv_status::timeout)
+			throw std::runtime_error("Timeout while waiting for message.");
 	mosquitto_message *msg = messages.front();
 	messages.pop();
 	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
