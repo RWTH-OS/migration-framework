@@ -36,7 +36,7 @@
 %% Select input file encoding:
 %%   utf8   - UTF-8, nowadays standard on most operating sytems
 %%   latin1 - ISO-8859-1
-\usepackage[]{luainputenc}                 
+\usepackage[utf8]{luainputenc}                 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Select language
 %%
@@ -138,12 +138,103 @@
 	\end{itemize}
 \end{frame}
 
+\begin{frame}[fragile]{YAML-Messages}
+	\begin{columns}[T]
+		\begin{column}{.40\textwidth}
+			\begin{lstlisting}[basicstyle=\ttfamily, language=C]
+			---
+			task: migrate start
+			vm-name: anthe1
+			destination: pandora2
+			parameter:
+			  live-migration: false
+			...
+			\end{lstlisting}
+		\end{column}
+		\begin{column}{.40\textwidth}
+			\begin{lstlisting}[basicstyle=\ttfamily, language=C]
+			---
+			result: migrate done
+			list:
+			  - vm-name: anthe1
+			    status: success
+			...
+			\end{lstlisting}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}{Procedure}
+	% define some styles
+	\tikzstyle{format} = [draw, thin, fill=blue!20]
+	\tikzstyle{medium} = [ellipse, draw, thin, fill=green!20, minimum height=2.5em]
+
+	\begin{figure}
+		\begin{tikzpicture}[node distance=3cm, auto,>=latex', thick]
+			%\path[use as bounding box] (-1,0) rectangle (10,-2);
+			\path[->] node[medium] (sched) {scheduler};
+			\path[->] node[format, right of=sched] (comm) {communicator}
+			(sched) edge node {MQTT} (comm);
+			\path[->] node[format, right of=comm] (parser) {parser}
+			(comm) edge node {YAML} (parser);
+			\path[->] node[format, right of=parser] (th) {task handler}
+			(parser) edge node {task} (th);
+			\path[->] node[format, below of=th] (task) {task}
+			(th) edge node {execute} (task);
+			\path[->] node[format, below of=task] (hv) {hypervisor}
+			(task) edge node {} (hv);
+			\path[->] node[format, left of=task] (parser2) {parser}
+			(task) edge node {result} (parser2);
+			\path[->] node[format, left of=parser2] (comm2) {communicator}
+			(parser2) edge node {YAML} (comm2);
+			\path[->] node[medium, left of=comm2] (sched2) {scheduler};
+			(comm2) edge node {MQTT} (sched2);
+		\end{tikzpicture}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Classes}
+	\begin{itemize}
+		\item Task\_handler is the main loop which gets messages from Communicator, calls parser and launches Tasks in Threads.
+		\item Parser translates YAML messages to Task/Subtask objects and Result objects back to YAML.
+		\item Communicator and Hypervisor are interfaces
+			\begin{itemize}
+				\item Implementations: MQTT\_communicator and Libvirt\_hypervisor
+			\item By adding other implementations the framework can be expanded.
+			\item Integration in other projects is also possible.
+			\item e.g. using the Communicator interface to call migration
+		\end{itemize}
+		\item Tasks can contain more than one subtask (e.g. "start 5 VMs")
+			\begin{itemize}
+				\item each subtask is executed in a separate thread
+			\end{itemize}
+	\end{itemize}
+\end{frame}
+
+
 \subsection{Features}
 \begin{frame}{Features}
-	\begin{itemize}
-		\item Welche funktionalität wird bereits unterstüzt? Was fehlt noch?
-		\item Auf weiteren Folien könntest du details zu Besonderheiten erklären.
-	\end{itemize}
+%		\item Welche funktionalität wird bereits unterstüzt? Was fehlt noch?
+%		\item Auf weiteren Folien könntest du details zu Besonderheiten erklären.
+	\begin{columns}[T]
+		\begin{column}{.40\textwidth}
+			Done:
+			\begin{itemize}
+				\item All parts are ready (MQTT\_communicator, parser, Task\_handler, Task, Libvirt\_hypervisor)
+				\item Task execution and communication are asynchronous.
+				\item Start, stop and migrate tasks are currently available.
+			\end{itemize}
+		\end{column}
+		\begin{column}{.40\textwidth}
+		Missing:
+		\begin{itemize}
+			\item No details about errors are sent back.
+			\item No possibility to ask status of migration framework
+			\item No PCI attach/detach
+			\item Other pre/post hooks (e.g. reduce memory)
+		\end{itemize}
+		\end{column}
+	\end{columns}
 \end{frame}
 
 \section{Performance Results}
@@ -202,8 +293,11 @@
 \section{Outlook}
 \begin{frame}{Outlook}
 	\begin{itemize}
-		\item Du kannst es auch ``Conclusion'' nennen
-		\item Hier kannst du noch einmal kurz zusammen fassen was bisher erreicht wurde und was noch fehlt.
+		\item Basics are working
+		\item PCI attach/detach almost done
+		\item Currently working on verbose error reporting
+%		\item Du kannst es auch ``Conclusion'' nennen
+%		\item Hier kannst du noch einmal kurz zusammen fassen was bisher erreicht wurde und was noch fehlt.
 	\end{itemize}
 \end{frame}
 
