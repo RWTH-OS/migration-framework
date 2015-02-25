@@ -77,7 +77,6 @@ int main(int argc, char *argv[])
 		std::string migrate_to_b_task = migrate_to_a_task;
 		find_and_replace(migrate_to_a_task, "destination-placeholder", server_a);
 		find_and_replace(migrate_to_b_task, "destination-placeholder", server_b);
-		std::cout << migrate_to_b_task << std::endl;
 	
 		// start vm
 		std::cout << "Starting VM." << std::endl;

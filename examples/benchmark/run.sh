@@ -1,8 +1,9 @@
 #!/bin/bash
 
 n=1
+memory=1024
 
-while getopts A:B:h opt; do
+while getopts A:B:V:n:m:h opt; do
 	case $opt in
 	A)
 		server_a="$OPTARG"
@@ -10,17 +11,35 @@ while getopts A:B:h opt; do
 	B)
 		server_b="$OPTARG"
 		;;
+	V)
+		vm_name="$OPTARG"
+		;;
 	n)
 		n="$OPTARG"
 		;;
+	m)
+		memory="$OPTARG"
+		;;
 	h)
-		echo -e "Usage: `basename $0` -A serverA -B serverB
+		echo -e "Usage: `basename $0` -A serverA -B serverB -V vm-name [-n N] [-m memory]
 
 		-A serverA
 		Hostname of first server to start migfra on.
 
 		-B serverB
-		Hostname of second server to start migfra on." | sed 's/^\s\s*//g'
+		Hostname of second server to start migfra on.
+		
+		-V vm-name
+		Name of the virtual machine to use.
+		
+		-n N (=1)
+		Repeat migration ping pong N times.
+		Default value 1.
+		
+		-m memory (=1024)
+		The RAM in MiB to assign to vm.
+		Default value 1024" | sed 's/^\s\s*//g'
+
 		exit 0
 		;;
 	esac
@@ -30,13 +49,17 @@ done
 if [ -z "$server_a" ] && [ -z "$server_b" ]; then
 	echo "No scheduler and server hosts passed as arguments."
 elif [ -n "$server_a" ] && [ -n "$server_b" ]; then
+	if [ -z "$vm_name" ]; then
+		echo "No vm-name passed as argument."
+		exit 1
+	fi
 	# start migfra on servers using ssh in background
 	echo "Start migfra on servers."
 	ssh -f "$server_a" "`realpath $0` -A $server_a"
 	ssh -f "$server_b" "`realpath $0` -B $server_b"
 
 	# start migration benchmark
-	`dirname $0`/../../build/migfra_benchmark -n $n -V "vm1" -t "." -H pandora3 -A pandora1 -B pandora2 -m 1024
+	`dirname $0`/../../build/migfra_benchmark -n $n -V "$vm_name" -t "." -H "`hostname`" -A "$server_a" -B "$server_b" -m "$memory"
 
 	# quit migfra on servers
 	echo "Stop migfra on servers"
