@@ -34,10 +34,11 @@ std::mutex Thread_counter::count_mutex;
 std::condition_variable Thread_counter::count_cv;
 
 
-Result::Result(const std::string &title, const std::string &vm_name, const std::string &status) :
+Result::Result(const std::string &title, const std::string &vm_name, const std::string &status, const std::string &details) :
 	title(title),
 	vm_name(vm_name),
-	status(status)
+	status(status),
+	details(details)
 {
 }
 
@@ -87,9 +88,9 @@ std::future<Result> Start::execute(const std::shared_ptr<Hypervisor> &hypervisor
 		try {
 			hypervisor->start(vm_name, vcpus, memory);
 		} catch (const std::exception &e) {
-			return Result("vm started", vm_name, "error");
+			return Result("vm started", vm_name, "error", e.what());
 		}
-		return Result("vm started", vm_name, "success");
+		return Result("vm started", vm_name, "success", "");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
@@ -108,9 +109,9 @@ std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 		try {
 			hypervisor->stop(vm_name);
 		} catch (const std::exception &e) {
-			return Result("vm stopped", vm_name, "error");
+			return Result("vm stopped", vm_name, "error", e.what());
 		}
-		return Result("vm stopped", vm_name, "success");
+		return Result("vm stopped", vm_name, "success", "");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
@@ -133,9 +134,9 @@ std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervis
 		try {
 			hypervisor->migrate(vm_name, dest_hostname, live_migration);
 		} catch (const std::exception &e) {
-			return Result("migrate done", vm_name, "error");
+			return Result("migrate done", vm_name, "error", e.what());
 		}
-		return Result("migrate done", vm_name, "success");
+		return Result("migrate done", vm_name, "success", "");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }

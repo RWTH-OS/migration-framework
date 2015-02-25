@@ -113,6 +113,8 @@ int main(int argc, char *argv[])
 			if (results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			
 			// migrate to a	
 			start = std::chrono::high_resolution_clock::now();
 			comm.send_message(migrate_to_a_task, "topic-b");
@@ -121,6 +123,8 @@ int main(int argc, char *argv[])
 			results = parser::str_to_results(results_str);
 			if (results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
+
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 	
 		// stop vm
@@ -131,12 +135,15 @@ int main(int argc, char *argv[])
 
 		// print results
 		std::cout << "Results:" << std::endl;
-		std::chrono::duration<double, std::nano> average_duration(0);
+		std::chrono::duration<double> average_duration(0);
 		for (unsigned int i = 0; i != 2*n; ++i) {
-			std::cout << diffs[i].count() << "nsec" << std::endl;
+			std::cout << i << ": ";
+			std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(diffs[i]).count() << "msec" << std::endl;
 			average_duration +=diffs[i];
 		}
 		average_duration /= (2*n);
+		std::cout << "Average: ";
+		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(average_duration).count() << "msec" << std::endl;
 
 		return EXIT_SUCCESS;
 	} catch (const std::exception &e) {

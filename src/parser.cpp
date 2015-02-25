@@ -95,6 +95,8 @@ std::string results_to_str(const std::vector<Result> &results)
 		YAML::Node sub_node;
 		sub_node["vm-name"] = iter.vm_name;
 		sub_node["status"] = iter.status;
+		if (iter.details != "")
+			sub_node["details"] = iter.details;
 		node["list"].push_back(sub_node);
 	}
 	return "---\n" + YAML::Dump(node) + "\n...";
@@ -111,7 +113,8 @@ std::vector<Result> str_to_results(const std::string &str)
 			throw std::invalid_argument("Invalid result list.");
 		results.emplace_back(node["result"].as<std::string>(),
 				iter["vm-name"].as<std::string>(),
-				iter["status"].as<std::string>());
+				iter["status"].as<std::string>(),
+				iter["details"] ? iter["details"].as<std::string>() : "");
 	}
 	return results;
 }

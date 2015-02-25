@@ -52,10 +52,11 @@ private:
  */
 struct Result
 {
-	Result(const std::string &title, const std::string &vm_name, const std::string &status);
+	Result(const std::string &title, const std::string &vm_name, const std::string &status, const std::string &details);
 	std::string title;
 	std::string vm_name;
 	std::string status;
+	std::string details;
 };
 
 /**
