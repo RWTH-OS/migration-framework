@@ -14,6 +14,8 @@
 std::string read_file(const std::string &file_name)
 {
 	std::ifstream file_stream(file_name);
+	if (!file_stream.is_open())
+		throw std::runtime_error("File " + file_name + " not found.");
 	std::stringstream string_stream;
 	string_stream << file_stream.rdbuf();
 	return string_stream.str();
@@ -43,7 +45,7 @@ int main(int argc, char *argv[])
 		po::options_description desc("Options");
 		desc.add_options()
 			("help,h", "produce help message")
-			(",n", po::value<unsigned int>(&n)->default_value(1), "run benchmark n times")
+			(",n", po::value<decltype(n)>(&n)->default_value(1), "run benchmark n times")
 			("vm-name,V", po::value<std::string>(&vm_name)->required(), "name of virtual machine to use")
 			("tasks-dir,t", po::value<std::string>(&tasks_dir)->required(), "path to directory of task files")
 			("host-name,H", po::value<std::string>(&host_name)->required(), "name of host to start communicator on")
@@ -58,6 +60,10 @@ int main(int argc, char *argv[])
 			return EXIT_SUCCESS;
 		}
 		po::notify(vm);
+		if (n == 0) {
+			std::cout << "n is set to 0 -> exit immediately." << std::endl;
+			return EXIT_SUCCESS;
+		}
 	
 		// start communicator
 		std::cout << "Starting communicator." << std::endl;
@@ -101,29 +107,24 @@ int main(int argc, char *argv[])
 
 		// migrate (ping pong)
 		std::cout << "Starting to migrate." << std::endl;
-		std::vector<std::chrono::duration<double, std::nano>> diffs(2*n);
+		std::vector<std::chrono::duration<double, std::nano>> diffs(n);
 		//take time
 		for (decltype(n) i = 0; i != n; ++i) {
-			// migrate to b
 			auto start = std::chrono::high_resolution_clock::now();
+			// migrate to b
 			comm.send_message(migrate_to_b_task, "topic-a");
-			auto results_str = comm.get_message();
-			diffs[2*i] =  std::chrono::high_resolution_clock::now() - start;
-			auto results = parser::str_to_results(results_str);
-			if (results[0].status != "success")
+			auto results = parser::str_to_results(comm.get_message());
+			if (results[0].title == "migrate done" && results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
-			std::this_thread::sleep_for(std::chrono::seconds(1));
-			
 			// migrate to a	
-			start = std::chrono::high_resolution_clock::now();
 			comm.send_message(migrate_to_a_task, "topic-b");
-			results_str = comm.get_message();
-			diffs[2*i+1] =  std::chrono::high_resolution_clock::now() - start;
-			results = parser::str_to_results(results_str);
-			if (results[0].status != "success")
+			results = parser::str_to_results(comm.get_message());
+			if (results[0].title == "migrate done" && results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
+			auto end = std::chrono::high_resolution_clock::now();
+			diffs[i] = end - start;
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 	
@@ -136,16 +137,15 @@ int main(int argc, char *argv[])
 		// print results
 		std::cout << "Results:" << std::endl;
 		std::chrono::duration<double> average_duration(0);
-		for (unsigned int i = 0; i != 2*n; ++i) {
-			std::cout << i << ": ";
-			std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(diffs[i]).count() << "msec" << std::endl;
-			average_duration +=diffs[i];
+		for (auto &diff : diffs) {
+			std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(diff).count() << "msec" << std::endl;
+			average_duration += diff;
 		}
-		average_duration /= (2*n);
+		average_duration /= n;
 		std::cout << "Average: ";
 		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(average_duration).count() << "msec" << std::endl;
-
 		return EXIT_SUCCESS;
+
 	} catch (const std::exception &e) {
 		std::cout << "Error: " << e.what() << std::endl;
 		return EXIT_FAILURE;
