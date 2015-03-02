@@ -3,6 +3,7 @@
 #include "logging.hpp"
 
 #include <libvirt/libvirt.h>
+#include <libvirt/virterror.h>
 #include <stdexcept>
 #include <thread>
 #include <memory>
@@ -18,11 +19,12 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
-	if (virConnectClose(local_host_conn))
+	if (virConnectClose(local_host_conn)) {
 		LOG_PRINT(LOG_WARNING, "Some qemu connections have not been closed after destruction of hypervisor wrapper!");
+	}
 }
 
-void Libvirt_hypervisor::start(const std::string &vm_name, size_t vcpus, size_t memory)
+void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory)
 {
 	virDomainPtr d1 = virDomainLookupByName(local_host_conn, vm_name.c_str());
 	std::unique_ptr<virDomain, decltype(&virDomainFree)> domain(d1, virDomainFree);
@@ -33,12 +35,14 @@ void Libvirt_hypervisor::start(const std::string &vm_name, size_t vcpus, size_t 
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info->state != VIR_DOMAIN_SHUTOFF)
 		throw std::runtime_error("Wrong domain state: " + std::to_string(domain_info->state));
+	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CURRENT | VIR_DOMAIN_MEM_MAXIMUM) == -1)
+		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
+	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
+	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
 	if (virDomainCreate(domain.get()) == -1)
-		throw std::runtime_error("Error creating domain.");
-	if (virDomainSetVcpus(domain.get(), vcpus) == -1)
-		throw std::runtime_error("Setting number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
-	if (virDomainSetMemory(domain.get(), memory) == -1)
-		throw std::runtime_error("Setting memory to " + std::to_string(vcpus) + " KiB for domain " + vm_name);
+		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 }
 
 void Libvirt_hypervisor::stop(const std::string &vm_name)
@@ -76,5 +80,5 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	virDomainPtr d2 = virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, 0, 0);
 	std::unique_ptr<virDomain, decltype(&virDomainFree)> dest_domain(d2, virDomainFree);
 	if (!dest_domain)
-		throw std::runtime_error("Migration failed.");
+		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
 }

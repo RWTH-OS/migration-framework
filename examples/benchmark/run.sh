@@ -2,6 +2,8 @@
 
 n=1
 memory=1024
+verbose=false
+verbose_output="/dev/null"
 
 while getopts A:B:V:n:m:h opt; do
 	case $opt in
@@ -19,6 +21,10 @@ while getopts A:B:V:n:m:h opt; do
 		;;
 	m)
 		memory="$OPTARG"
+		;;
+	v)
+		verbose="$OPTARG"
+		verbose_output="&1"
 		;;
 	h)
 		echo -e "Usage: `basename $0` -A serverA -B serverB -V vm-name [-n N] [-m memory]
@@ -38,13 +44,18 @@ while getopts A:B:V:n:m:h opt; do
 		
 		-m memory (=1024)
 		The RAM in MiB to assign to vm.
-		Default value 1024" | sed 's/^\s\s*//g'
+		Default value 1024
+		
+		-v verbose (=false)
+		Specify if benchmark should run in verbose mode.
+		Not implemented yet." | sed 's/^\s\s*//g'
 
 		exit 0
 		;;
 	esac
 done
 
+(( memory *= 1024 ))
 
 if [ -z "$server_a" ] && [ -z "$server_b" ]; then
 	echo "No scheduler and server hosts passed as arguments."

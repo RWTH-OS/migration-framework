@@ -14,7 +14,7 @@ public:
 	/// TODO: Consider copy/move constructor implementation.
 	Libvirt_hypervisor();
 	~Libvirt_hypervisor();
-	void start(const std::string &vm_name, size_t vcpus, size_t memory);
+	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory);
 	void stop(const std::string &vm_name);
 	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration);
 private:

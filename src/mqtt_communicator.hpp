@@ -71,10 +71,6 @@ private:
 	 */
 	void on_disconnect(int rc) override;
 	/**
-	 * \brief Callback for published messages.
-	 */
-	void on_publish(int mid) override;
-	/**
 	 * \brief Callback for received messages.
 	 */
 	void on_message(const mosquitto_message *msg) override;

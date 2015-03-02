@@ -54,17 +54,13 @@ void MQTT_communicator::on_disconnect(int rc)
 	}
 }
 
-void MQTT_communicator::on_publish(int mid)
-{
-	LOG_STREAM(LOG_DEBUG, "Message " << mid << " published.");
-}
-
 void MQTT_communicator::on_message(const mosquitto_message *msg)
 {
 	LOG_PRINT(LOG_DEBUG, "on_message executed.");
 	mosquitto_message* buf = static_cast<mosquitto_message*>(malloc(sizeof(mosquitto_message)));
-	if (!buf) 
+	if (!buf) {
 		LOG_PRINT(LOG_ERR, "malloc failed allocating mosquitto_message.");
+	}
 	std::lock_guard<std::mutex> lock(msg_queue_mutex);
 	messages.push(buf);
 	mosquitto_message_copy(messages.back(), msg);

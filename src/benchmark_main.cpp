@@ -85,16 +85,13 @@ int main(int argc, char *argv[])
 		find_and_replace(migrate_to_b_task, "destination-placeholder", server_b);
 	
 		// start vm
-		std::cout << "Starting VM." << std::endl;
+		std::cout << "Starting VM using " << memory << " MiB RAM." << std::endl;
 		bool success = true;
 		do {
 			try {
 				comm.send_message(start_task, "topic-a");
-				std::string str = comm.get_message(std::chrono::seconds(1));
-				std::cout << str << std::endl;
-				auto results = parser::str_to_results(str);
-
-				if (results[0].status != "success")
+				auto results = parser::str_to_results(comm.get_message(std::chrono::seconds(1)));
+				if (results[0].title == "vm started" && results[0].status != "success")
 					throw std::runtime_error("Error while starting vm.");
 			} catch (const std::runtime_error &e) {
 				if (e.what() == std::string("Timeout while waiting for message.")) {
@@ -103,12 +100,14 @@ int main(int argc, char *argv[])
 				} else throw e;
 			}
 		} while (!success);
+
+		// wait for vm to start up.
+		std::cout << "Waiting 10 seconds for vm to start up." << std::endl;
 		std::this_thread::sleep_for(std::chrono::seconds(10));
 
-		// migrate (ping pong)
+		// migrate (ping pong) n times
 		std::cout << "Starting to migrate." << std::endl;
 		std::vector<std::chrono::duration<double, std::nano>> diffs(n);
-		//take time
 		for (decltype(n) i = 0; i != n; ++i) {
 			auto start = std::chrono::high_resolution_clock::now();
 			// migrate to b
