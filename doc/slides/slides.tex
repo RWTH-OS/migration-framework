@@ -31,6 +31,7 @@
 %% Version 0.1    03/28/2014    Initial presentation using this theme
 %% Version 0.2    04/01/2014    First version to be published in the institute 
 %%
+\PassOptionsToPackage{usenames,dvipsnames}{xcolor}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Select input file encoding:
@@ -165,36 +166,99 @@
 \end{frame}
 
 \begin{frame}{Procedure}
-	% define some styles
-	\tikzstyle{format} = [draw, thin, fill=blue!20]
-	\tikzstyle{medium} = [ellipse, draw, thin, fill=green!20, minimum height=2.5em]
-
 	\begin{figure}
-		\begin{tikzpicture}[node distance=3cm, auto,>=latex', thick]
-			%\path[use as bounding box] (-1,0) rectangle (10,-2);
-			\path[->] node[medium] (sched) {scheduler};
-			\path[->] node[format, right of=sched] (comm) {communicator}
-			(sched) edge node {MQTT} (comm);
-			\path[->] node[format, right of=comm] (parser) {parser}
-			(comm) edge node {YAML} (parser);
-			\path[->] node[format, right of=parser] (th) {task handler}
-			(parser) edge node {task} (th);
-			\path[->] node[format, below of=th] (task) {task}
-			(th) edge node {execute} (task);
-			\path[->] node[format, below of=task] (hv) {hypervisor}
-			(task) edge node {} (hv);
-			\path[->] node[format, left of=task] (parser2) {parser}
-			(task) edge node {result} (parser2);
-			\path[->] node[format, left of=parser2] (comm2) {communicator}
-			(parser2) edge node {YAML} (comm2);
-			\path[->] node[medium, left of=comm2] (sched2) {scheduler};
-			(comm2) edge node {MQTT} (sched2);
+		\begin{tikzpicture}[scheduler/.style={
+					minimum width=4em,
+					minimum height=.9*\textheight,
+					fill=blue,
+					outer sep=0,
+				},  communicator/.style={
+					minimum width=4em,
+					minimum height=.9*\textheight,
+					fill=blue,
+					outer sep=0,
+				},  parser/.style={
+					minimum width=4em,
+					minimum height=.9*\textheight,
+					fill=blue,
+					outer sep=0,
+				},  taskhandler/.style={
+					minimum width=8em,
+					minimum height=.25*\textheight,
+					fill=blue,
+					outer sep=0,
+				},  task/.style={
+					minimum width=2em,
+					minimum height=.12*\textheight,
+					fill=blue,
+					outer sep=0,
+				},  hypervisor/.style={
+					minimum width=8em,
+					minimum height=.25*\textheight,
+					fill=blue,
+					outer sep=0,
+				}
+			]
+
+			\coordinate (nodeDistH) at (6em, 0);
+			\coordinate (nodeDistV) at (0, -3.5em);
+			\coordinate (nodeDistVT) at (0, -1.5em);
+			\coordinate (taskLeftDist) at (3em, 0);
+			\coordinate (taskLeftDist) at (3em, 0);
+			\coordinate (taskRightDist) at (-3em, 0);
+			
+			% Scheduler
+			\node [scheduler] (scheduler) at (0,0) {};
+			\node [text={white}, rotate=90] at (scheduler) {Scheduler};
+			% Communicator
+			\node [communicator] (communicator) at ($(scheduler.east)+(nodeDistH)$){};
+			\node [text={white}, rotate=90] at (communicator) {Communicator};
+			% Parser
+			\node [parser] (parser) at ($(communicator.east)+(nodeDistH)$){};
+			\node [text={white}, rotate=90] at (parser) {Parser};
+			% Task Handler
+			\node [taskhandler] (taskhandler) at ($(parser.72)+(nodeDistH)$){};
+			\node [text={white}] at (taskhandler) {Task Handler};
+			% Tasks
+			\node [task] (taskL) at ($(taskhandler.south)+(nodeDistV)+(taskLeftDist)+(nodeDistVT)$){};
+			\node [text={white}, font=\small] at (taskL) {Task};
+			\node [task] (taskC) at ($(taskhandler.south)+(nodeDistV)$){};
+			\node [text={white}, font=\small] at (taskC) {Task};
+			\node [task] (taskR) at ($(taskhandler.south)+(nodeDistV)+(taskRightDist)-(nodeDistVT)$){};
+			\node [text={white}, font=\small] at (taskR) {Task};
+			% Hypervisor
+			\node [hypervisor] (hypervisor) at ($(taskC.south)+(nodeDistV)+(nodeDistVT)$){};
+			\node [text={white}] at (hypervisor) {Hypervisor};
+
+			% Path
+			\draw [thick,->] ($(scheduler.north east)!(communicator.105)!(scheduler.south east)$) -- (communicator.105);
+			\draw [thick,->] (communicator.255) -- ($(scheduler.north east)!(communicator.255)!(scheduler.south east)$);
+
+			\draw [thick,->] ($(communicator.north east)!(parser.105)!(communicator.south east)$) -- (parser.105);
+			\draw [thick,->] (parser.255) -- ($(communicator.north east)!(parser.255)!(communicator.south east)$);
+
+			\draw [thick,->] ($(parser.north east)!(taskhandler.west)!(parser.south east)$) -- (taskhandler.west);
+
+			\draw [thick,->] ($(taskhandler.south west)!(taskL.north)!(taskhandler.south east)$) -- (taskL.north);
+			\draw [thick,->] ($(taskhandler.south west)!(taskC.north)!(taskhandler.south east)$) -- (taskC.north);
+			\draw [thick,->] ($(taskhandler.south west)!(taskR.north)!(taskhandler.south east)$) -- (taskR.north);
+
+			\draw [thick,->] (taskL.south) -- ($(hypervisor.north west)!(taskL.south)!(hypervisor.north east)$);
+			\draw [thick,->] (taskC.south) -- ($(hypervisor.north west)!(taskC.south)!(hypervisor.north east)$);
+			\draw [thick,->] (taskR.south) -- ($(hypervisor.north west)!(taskR.south)!(hypervisor.north east)$);
+
+
+			\draw [thick,->] (taskL.west) -- ($(parser.north east)!(taskL.west)!(parser.south east)$);
+			\draw [thick,->] (taskC.west) -- ($(parser.north east)!(taskC.west)!(parser.south east)$);
+			\draw [thick,->] (taskR.west) -- ($(parser.north east)!(taskR.west)!(parser.south east)$);
+
 		\end{tikzpicture}
 	\end{figure}
 \end{frame}
 
 \begin{frame}{Classes}
 	\begin{itemize}
+		% TODO: UML
 		\item Task\_handler is the main loop which gets messages from Communicator, calls parser and launches Tasks in Threads.
 		\item Parser translates YAML messages to Task/Subtask objects and Result objects back to YAML.
 		\item Communicator and Hypervisor are interfaces
