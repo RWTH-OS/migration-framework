@@ -201,12 +201,11 @@
 				}
 			]
 
-			\coordinate (nodeDistH) at (6em, 0);
+			\coordinate (nodeDistH) at (7em, 0);
 			\coordinate (nodeDistV) at (0, -3.5em);
 			\coordinate (nodeDistVT) at (0, -1.5em);
-			\coordinate (taskLeftDist) at (3em, 0);
-			\coordinate (taskLeftDist) at (3em, 0);
-			\coordinate (taskRightDist) at (-3em, 0);
+			\coordinate (taskLeftDist) at (-3em, 0);
+			\coordinate (taskRightDist) at (3em, 0);
 			
 			% Scheduler
 			\node [scheduler] (scheduler) at (0,0) {};
@@ -221,28 +220,28 @@
 			\node [taskhandler] (taskhandler) at ($(parser.72)+(nodeDistH)$){};
 			\node [text={white}] at (taskhandler) {Task Handler};
 			% Tasks
-			\node [task] (taskL) at ($(taskhandler.south)+(nodeDistV)+(taskLeftDist)+(nodeDistVT)$){};
+			\node [task] (taskL) at ($(taskhandler.south)+(nodeDistV)+(taskLeftDist)-(nodeDistVT)$){};
 			\node [text={white}, font=\small] at (taskL) {Task};
 			\node [task] (taskC) at ($(taskhandler.south)+(nodeDistV)$){};
 			\node [text={white}, font=\small] at (taskC) {Task};
-			\node [task] (taskR) at ($(taskhandler.south)+(nodeDistV)+(taskRightDist)-(nodeDistVT)$){};
+			\node [task] (taskR) at ($(taskhandler.south)+(nodeDistV)+(taskRightDist)+(nodeDistVT)$){};
 			\node [text={white}, font=\small] at (taskR) {Task};
 			% Hypervisor
 			\node [hypervisor] (hypervisor) at ($(taskC.south)+(nodeDistV)+(nodeDistVT)$){};
 			\node [text={white}] at (hypervisor) {Hypervisor};
 
 			% Path
-			\draw [thick,->] ($(scheduler.north east)!(taskhandler.west)!(scheduler.south east)$) -- ($(communicator.north west)!(taskhandler.west)!(communicator.south west)$);
-			\draw [thick,->] ($(communicator.north west)!(hypervisor.west)!(communicator.south west)$) -- ($(scheduler.north east)!(hypervisor.west)!(scheduler.south east)$);
+			\draw [thick,->] ($(scheduler.north east)!(taskhandler.west)!(scheduler.south east)$) -- ($(communicator.north west)!(taskhandler.west)!(communicator.south west)$) node[midway,above,sloped]{MQTT};
+			\draw [thick,->] ($(communicator.north west)!(hypervisor.west)!(communicator.south west)$) -- ($(scheduler.north east)!(hypervisor.west)!(scheduler.south east)$) node[midway,above,sloped]{MQTT};
 
-			\draw [thick,->] ($(communicator.north east)!(taskhandler.west)!(communicator.south east)$) -- ($(parser.north west)!(taskhandler.west)!(parser.south west)$);
-			\draw [thick,->] ($(parser.north west)!(hypervisor.west)!(parser.south west)$) -- ($(communicator.north east)!(hypervisor.west)!(communicator.south east)$);
+			\draw [thick,->] ($(communicator.north east)!(taskhandler.west)!(communicator.south east)$) -- ($(parser.north west)!(taskhandler.west)!(parser.south west)$) node[midway,above,sloped]{YAML};
+			\draw [thick,->] ($(parser.north west)!(hypervisor.west)!(parser.south west)$) -- ($(communicator.north east)!(hypervisor.west)!(communicator.south east)$) node[midway,above,sloped]{YAML};
 
-			\draw [thick,->] ($(parser.north east)!(taskhandler.west)!(parser.south east)$) -- (taskhandler.west);
+			\draw [thick,->] ($(parser.north east)!(taskhandler.west)!(parser.south east)$) -- (taskhandler.west) node[midway,above,sloped]{Task};
 
 			\draw [thick,->] ($(taskhandler.south west)!(taskL.north)!(taskhandler.south east)$) -- (taskL.north);
 			\draw [thick,->] ($(taskhandler.south west)!(taskC.north)!(taskhandler.south east)$) -- (taskC.north);
-			\draw [thick,->] ($(taskhandler.south west)!(taskR.north)!(taskhandler.south east)$) -- (taskR.north);
+			\draw [thick,->] ($(taskhandler.south west)!(taskR.north)!(taskhandler.south east)$) -- (taskR.north) node[midway,above,sloped]{Threads};
 
 			\draw [thick,->] (taskL.south) -- ($(hypervisor.north west)!(taskL.south)!(hypervisor.north east)$);
 			\draw [thick,->] (taskC.south) -- ($(hypervisor.north west)!(taskC.south)!(hypervisor.north east)$);
@@ -251,7 +250,7 @@
 
 			\draw [thick,->] (taskL.west) -- ($(parser.north east)!(taskL.west)!(parser.south east)$);
 			\draw [thick,->] (taskC.west) -- ($(parser.north east)!(taskC.west)!(parser.south east)$);
-			\draw [thick,->] (taskR.west) -- ($(parser.north east)!(taskR.west)!(parser.south east)$);
+			\draw [thick,->] (taskR.west) -- ($(parser.north east)!(taskR.west)!(parser.south east)$) node[near end,below,sloped]{Results};
 
 		\end{tikzpicture}
 	\end{figure}
