@@ -1,0 +1,22 @@
+# Host 1: pandora3
+# Host 2: pandora4
+# Guest: centos660
+# CPU: Intel(R) Xeon(R) CPU E5-2650 v2 @ 2.60GHz
+# CC: gcc 4.8.3
+# Host Kernels: 3.15.10-201.fc20.x86_64
+# Guest Kernels: 2.6.32-504.3.3.el6.x86_64
+# Host Distro: Fedora 20 
+# Guest Distro: CentOS 6.6 
+# Guest image format: raw
+# Guest image size: 15 GiB
+# Host configured with SR-IOV
+# Migration rounds: 20
+#--------------------
+KiB		cold		cold_hotplug 	cold_hotplug_teardown	cold_migfra
+262144   	2.36 		3.06 		3.30			3.874
+524288   	2.53 		3.36		3.64			3.973
+1048576  	2.67 		3.72		3.98			4.288
+2097152  	2.94 		4.56		4.78			4.801
+4194304  	3.67 		6.28		6.54			6.170
+8388608  	4.69 		9.27		9.74			8.149
+16777216 	6.73 		16.03		16.16			12.145

@@ -18,10 +18,6 @@ public:
 	void stop(const std::string &vm_name);
 	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration);
 private:
-	void start_task();
-	void stop_task();
-	void migrate_task();
-
 	virConnectPtr local_host_conn;	
 };
 

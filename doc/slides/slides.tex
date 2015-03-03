@@ -57,6 +57,7 @@
 \usepackage{listings} 						% for lstlisting and \lstinline|..|
 %% TikZ can be used to /program/ graphics.
 \usepackage{tikz} 							% comment-out, if not needed 
+\usepackage{tikz-uml}
 
 %% Some TikZ-libraries and settings for the examples...
 \usetikzlibrary{shadings} 					% GW: color gradients
@@ -170,32 +171,32 @@
 		\begin{tikzpicture}[scheduler/.style={
 					minimum width=4em,
 					minimum height=.9*\textheight,
-					fill=blue,
+					fill=light,
 					outer sep=0,
 				},  communicator/.style={
 					minimum width=4em,
 					minimum height=.9*\textheight,
-					fill=blue,
+					fill=dark,
 					outer sep=0,
 				},  parser/.style={
 					minimum width=4em,
 					minimum height=.9*\textheight,
-					fill=blue,
+					fill=dark,
 					outer sep=0,
 				},  taskhandler/.style={
 					minimum width=8em,
 					minimum height=.25*\textheight,
-					fill=blue,
+					fill=dark,
 					outer sep=0,
 				},  task/.style={
 					minimum width=2em,
 					minimum height=.12*\textheight,
-					fill=blue,
+					fill=dark,
 					outer sep=0,
 				},  hypervisor/.style={
 					minimum width=8em,
 					minimum height=.25*\textheight,
-					fill=blue,
+					fill=dark,
 					outer sep=0,
 				}
 			]
@@ -231,11 +232,11 @@
 			\node [text={white}] at (hypervisor) {Hypervisor};
 
 			% Path
-			\draw [thick,->] ($(scheduler.north east)!(communicator.105)!(scheduler.south east)$) -- (communicator.105);
-			\draw [thick,->] (communicator.255) -- ($(scheduler.north east)!(communicator.255)!(scheduler.south east)$);
+			\draw [thick,->] ($(scheduler.north east)!(taskhandler.west)!(scheduler.south east)$) -- ($(communicator.north west)!(taskhandler.west)!(communicator.south west)$);
+			\draw [thick,->] ($(communicator.north west)!(hypervisor.west)!(communicator.south west)$) -- ($(scheduler.north east)!(hypervisor.west)!(scheduler.south east)$);
 
-			\draw [thick,->] ($(communicator.north east)!(parser.105)!(communicator.south east)$) -- (parser.105);
-			\draw [thick,->] (parser.255) -- ($(communicator.north east)!(parser.255)!(communicator.south east)$);
+			\draw [thick,->] ($(communicator.north east)!(taskhandler.west)!(communicator.south east)$) -- ($(parser.north west)!(taskhandler.west)!(parser.south west)$);
+			\draw [thick,->] ($(parser.north west)!(hypervisor.west)!(parser.south west)$) -- ($(communicator.north east)!(hypervisor.west)!(communicator.south east)$);
 
 			\draw [thick,->] ($(parser.north east)!(taskhandler.west)!(parser.south east)$) -- (taskhandler.west);
 
@@ -256,9 +257,102 @@
 	\end{figure}
 \end{frame}
 
+\begin{frame}{UML}
+	\tikzumlset{font=\footnotesize}
+	\begin{tikzpicture}
+		\begin{umlpackage}{Migration-Framework}
+			\umlclass[x=0,y=0,type=interface]{Communicator}{}
+			{+ send\_message(str : string) : void\\
+			 + get\_message() : string}
+			\umlclass[x=0,y=-3]{MQTT\_communicator}
+			{
+				- subscribe\_topic : string\\
+				- publish\_topic : string\\
+			}
+			{
+				+ send\_message(str : string) : void\\
+			 	+ get\_message() : string
+			}
+			\umlimpl[]{Communicator}{MQTT\_communicator}
+			\umlclass[x=7,y=0,type=interface]{Hypervisor}{}
+			{
+				+ start(vm : string, vcpus : uint, memory : ulong) : void\\
+				+ stop(vm : string) : void\\
+				+ migrate(vm : string, dest : string, live : bool) : void
+			}
+			\umlclass[x=7,y=-3]{Libvirt\_hypervisor}
+			{
+				- local\_host\_conn : virConnectPtr
+			}
+			{
+				+ start(vm : string, vcpus : uint, memory : ulong) : void\\
+				+ stop(vm : string) : void\\
+				+ migrate(vm : string, dest : string, live : bool) : void
+			}
+			\umlimpl[]{Hypervisor}{Libvirt\_hypervisor}
+		\end{umlpackage}
+	\end{tikzpicture}
+\end{frame}
+
+\begin{frame}{UML}
+	\tikzumlset{font=\scriptsize}
+	\begin{tikzpicture}
+		\begin{umlpackage}{Migration-Framework}
+			\umlclass[x=0,y=0]{Task\_handler}
+			{
+				hv : Hypervisor\\
+				comm : Communicator
+			}
+			{
+				loop() : void
+			}
+			\umlclass[x=4,y=0]{Task}
+			{
+			}
+			{
+				\tiny exec(hv : Hypervisor,\\\tiny comm : Communicator) : void
+			}
+			\umlclass[x=9,y=0,type=interface]{Sub\_task}{}
+			{
+				exec(hv : Hypervisor) : future<Results>
+			}
+			\umlclass[x=1.5,y=-3]{Start}
+			{
+				vm : string\\
+				vcpus : uint\\
+				memory : ulong
+			}
+			{
+				\tiny exec(hv : Hypervisor) : future<Results>
+			}
+			\umlclass[x=5.75,y=-3]{Stop}
+			{
+				vm : string
+			}
+			{
+				\tiny exec(hv : Hypervisor) : future<Results>
+			}
+			\umlclass[x=10,y=-3]{Migrate}
+			{
+				vm : string\\
+				dest : string\\
+				live : bool
+			}
+			{
+				\tiny exec(hv : Hypervisor) : future<Results>
+			}
+			\umlimpl[]{Sub\_task}{Start}
+			\umlimpl[]{Sub\_task}{Stop}
+			\umlimpl[]{Sub\_task}{Migrate}
+			\umlcompo[mult1=1,mult2=1..*]{Task}{Sub\_task}
+			\umlaggreg[mult1=1,mult2=0..*]{Task\_handler}{Task}
+
+		\end{umlpackage}
+	\end{tikzpicture}
+\end{frame}
+
 \begin{frame}{Classes}
 	\begin{itemize}
-		% TODO: UML
 		\item Task\_handler is the main loop which gets messages from Communicator, calls parser and launches Tasks in Threads.
 		\item Parser translates YAML messages to Task/Subtask objects and Result objects back to YAML.
 		\item Communicator and Hypervisor are interfaces
@@ -302,7 +396,7 @@
 \end{frame}
 
 \section{Performance Results}
-\pgfplotstableread[col sep=space]{data/libvirt/migrate_p3p4_anthe1fc20.dat}\migrationTime
+\pgfplotstableread[col sep=space]{data/mem_bench_avg_values.dat}\migrationTime
 \begin{frame}{Performance Results}
 	\begin{itemize}
 		\item Was kann man deiner Meinung nach alles Messen?
@@ -328,27 +422,27 @@
 					legend cell align=left,
 %
 					legend pos=north west,
-					ymin=0, ymax=35,
-					xmin=134217728, xmax=51539607552,%34359738368,
+					ymin=0, ymax=17,
+					xmin=262144, xmax=33554432,
 					xlabel={Memory in Byte}, 
 					ylabel={Migration time in s},
-					xtick={134217728  , 536870912  , 2147483648 , 8589934592 ,  34359738368},
-					xticklabels={,512\,Mi,2\,Gi,8\,Gi,32\,Gi},
+					xtick={262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216},
+					xticklabels={256\,Mi,512\,Mi,1\,Gi,2\,Gi,4\,Gi,8\,Gi,16\,Gi},
 				]
 				\addplot [
 					thick, 
 					mark=*,
-					color=light,
+					color=normal,
 					mark color=light,
-				] table[x=mem_assigned,y=cold]{\migrationTime};
-				\addlegendentry{Migration only}
+				] table[x=KiB,y=cold]{\migrationTime};
+				\addlegendentry{Direct libvirt migration}
 				\addplot [
 					thick, 
 					mark=triangle*,
 					color=dark,
 					mark color=dark,
-				] table[x=mem_assigned,y=cold_hotplug]{\migrationTime};
-				\addlegendentry{With hotplug}
+				] table[x=KiB,y=cold_migfra]{\migrationTime};
+				\addlegendentry{Migration-Framework}
 			\end{semilogxaxis}
 		\end{tikzpicture}
 	\end{center}
@@ -360,6 +454,7 @@
 		\item Basics are working
 		\item PCI attach/detach almost done
 		\item Currently working on verbose error reporting
+		\item Plans to create library from parser module
 %		\item Du kannst es auch ``Conclusion'' nennen
 %		\item Hier kannst du noch einmal kurz zusammen fassen was bisher erreicht wurde und was noch fehlt.
 	\end{itemize}
