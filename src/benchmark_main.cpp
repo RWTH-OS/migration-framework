@@ -102,8 +102,8 @@ int main(int argc, char *argv[])
 		} while (!success);
 
 		// wait for vm to start up.
-		std::cout << "Waiting 10 seconds for vm to start up." << std::endl;
-		std::this_thread::sleep_for(std::chrono::seconds(10));
+		std::cout << "Waiting 30 seconds for vm to start up." << std::endl;
+		std::this_thread::sleep_for(std::chrono::seconds(30));
 
 		// migrate (ping pong) n times
 		std::cout << "Starting to migrate." << std::endl;
@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 			std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(diff).count() << "msec" << std::endl;
 			average_duration += diff;
 		}
-		average_duration /= n;
+		average_duration /= 2*n;
 		std::cout << "Average: ";
 		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(average_duration).count() << "msec" << std::endl;
 		return EXIT_SUCCESS;
