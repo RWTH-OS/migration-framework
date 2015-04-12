@@ -4,6 +4,7 @@
 #include "hypervisor.hpp"
 
 #include "communicator.hpp"
+#include "serializable.hpp"
 
 #include <string>
 #include <vector>
@@ -50,21 +51,26 @@ private:
  *
  * Results are sent back packed in a vector representing all results of a Task.
  */
-struct Result
+struct Result : public fast::Serializable
 {
 	Result(const std::string &title, const std::string &vm_name, const std::string &status, const std::string &details);
 	std::string title;
 	std::string vm_name;
 	std::string status;
 	std::string details;
+
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 };
+YAML_CONVERT_IMPL(Result)
 
 /**
  * \brief An abstract class to provide an interface for a Sub_task.
  */
-class Sub_task
+class Sub_task : public fast::Serializable
 {
 public:
+	Sub_task() = default;
 	/**
 	 * \brief Constructor for Sub_task.
 	 *
@@ -73,9 +79,13 @@ public:
 	Sub_task(bool concurrent_execution);
 	virtual ~Sub_task(){};
 	virtual std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor) = 0;
+
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 protected:
 	bool concurrent_execution;
 };
+YAML_CONVERT_IMPL(Sub_task)
 
 /**
  * \brief Generic task class containing sub tasks.
@@ -83,7 +93,8 @@ protected:
  * Contains several Sub_tasks and executes those.
  * Task_handler will call execute method to execute the task.
  */
-class Task
+class Task :
+	public fast::Serializable
 {
 public:
 	/**
@@ -110,10 +121,16 @@ public:
 	 * \param comm Communicator to be used to send results.
 	 */
 	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm);
+
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 private:
 	std::vector<std::shared_ptr<Sub_task>> sub_tasks;
 	bool concurrent_execution;
+
+	std::string type() const;
 };
+YAML_CONVERT_IMPL(Task)
 
 /**
  * \brief Sub_task to start a single virtual machine.
@@ -122,6 +139,7 @@ class Start :
 	public Sub_task
 {
 public:
+	Start() = default;
 	/**
 	 * \brief Constructor for Start sub task.
 	 *
@@ -130,7 +148,7 @@ public:
 	 * \param memory The ram to assign to the virtual machine in MiB.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Start(const std::string &vm_name, size_t vcpus, size_t memory, bool concurrent_execution);
+	Start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, bool concurrent_execution);
 
 	/**
 	 * \brief Execute the Sub_task.
@@ -140,11 +158,14 @@ public:
 	 */
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 private:
 	std::string vm_name;
-	size_t vcpus;
-	size_t memory;
+	unsigned int vcpus;
+	unsigned long memory;
 };
+YAML_CONVERT_IMPL(Start)
 
 /**
  * \brief Sub_task to stop a single virtual machine.
@@ -153,6 +174,7 @@ class Stop :
 	public Sub_task
 {
 public:
+	Stop() = default;
 	/**
 	 * \brief Constructor for Stop sub task.
 	 *
@@ -169,9 +191,13 @@ public:
 	 */
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
 private:
 	std::string vm_name;
 };
+YAML_CONVERT_IMPL(Stop)
 
 /**
  * \brief Sub_task to migrate a virtual machine.
@@ -180,6 +206,7 @@ class Migrate :
 	public Sub_task
 {
 public:
+	Migrate() = default;
 	/**
 	 * \brief Constructor for Migrate sub task.
 	 *
@@ -198,10 +225,14 @@ public:
 	 */
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
 private:
 	std::string vm_name;
 	std::string dest_hostname;
 	bool live_migration;
 };
+YAML_CONVERT_IMPL(Migrate)
 
 #endif
