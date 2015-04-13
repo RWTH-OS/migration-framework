@@ -54,10 +54,11 @@ Task generate_migrate_task(const YAML::Node &node)
 	auto vm_name = node["vm-name"].as<std::string>();
 	auto destination = node["destination"].as<std::string>();
 	auto live_migration = node["parameter"]["live-migration"].as<bool>();
+	auto pscom_hook = node["parameter"]["pscom-hook"].as<bool>(false);
 	auto concurrent_execution = node["concurrent_execution"] ? 
 		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
 	std::vector<std::shared_ptr<Sub_task>> migrate_tasks;
-	migrate_tasks.push_back(std::make_shared<Migrate>(vm_name, destination, live_migration, false));
+	migrate_tasks.push_back(std::make_shared<Migrate>(vm_name, destination, live_migration, false, pscom_hook));
 	return Task(std::move(migrate_tasks), concurrent_execution);
 }
 

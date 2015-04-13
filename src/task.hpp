@@ -188,7 +188,7 @@ public:
 	 * \param live_migration Option to enable live migration.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution);
+	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution, bool enable_pscom_hook);
 
 	/**
 	 * \brief Execute the Sub_task.
@@ -199,9 +199,15 @@ public:
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
 private:
+	void pre_hooks() const;
+	void post_hooks() const;
+	void pre_pscom_hook() const;
+	void post_pscom_hook() const;
+
 	std::string vm_name;
 	std::string dest_hostname;
 	bool live_migration;
+	bool pscom_hook_enabled;
 };
 
 #endif

@@ -116,27 +116,50 @@ std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution) :
+Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution, bool pscom_hook_enabled) :
 	Sub_task::Sub_task(concurrent_execution),
 	vm_name(vm_name),
 	dest_hostname(dest_hostname),
-	live_migration(live_migration)
+	live_migration(live_migration),
+	pscom_hook_enabled(pscom_hook_enabled)
 {
 }
 
 std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 {
-	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
-	auto &dest_hostname = this->dest_hostname;
-	auto &live_migration = this->live_migration;
-	auto func = [&hypervisor, vm_name, dest_hostname, live_migration] ()
+	auto &this_copy = *this; /// \todo In C++14 init capture should be used!
+	auto func = [&hypervisor, this_copy] ()
 	{
 		try {
-			hypervisor->migrate(vm_name, dest_hostname, live_migration);
+			this_copy.pre_hooks();
+			hypervisor->migrate(this_copy.vm_name, this_copy.dest_hostname, this_copy.live_migration);
+			this_copy.post_hooks();
 		} catch (const std::exception &e) {
-			return Result("migrate done", vm_name, "error", e.what());
+			return Result("migrate done", this_copy.vm_name, "error", e.what());
 		}
-		return Result("migrate done", vm_name, "success", "");
+		return Result("migrate done", this_copy.vm_name, "success", "");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
+}
+
+void Migrate::pre_hooks() const
+{
+	if (pscom_hook_enabled)
+		pre_pscom_hook();
+}
+
+void Migrate::post_hooks() const
+{
+	if (pscom_hook_enabled)
+		post_pscom_hook();
+}
+
+void Migrate::pre_pscom_hook() const
+{
+	/// \todo Implementation
+}
+
+void Migrate::post_pscom_hook() const
+{
+	/// \todo Implementation
 }
