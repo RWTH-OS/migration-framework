@@ -13,6 +13,7 @@
 int main(int argc, char *argv[])
 {
 	try {
+		mosqpp::lib_init();
 		namespace po = boost::program_options;
 		po::options_description desc("Options");
 		desc.add_options()
@@ -35,5 +36,6 @@ int main(int argc, char *argv[])
 	} catch (const std::exception &e) {
 		LOG_STREAM(LOG_ERR, "Exception: " << e.what());
 	}
+	mosqpp::lib_cleanup();
 	return EXIT_SUCCESS;
 }

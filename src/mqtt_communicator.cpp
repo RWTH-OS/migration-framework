@@ -20,7 +20,6 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	keepalive(keepalive)
 {
 	LOG_PRINT(LOG_DEBUG, "Initializing MQTT_communicator...");
-	mosqpp::lib_init();
 	loop_start();
 	connect_async(host.c_str(), port, keepalive);
 	subscribe(nullptr, subscribe_topic.c_str(), 2);
@@ -32,7 +31,6 @@ MQTT_communicator::~MQTT_communicator()
 	LOG_PRINT(LOG_DEBUG, "Closing MQTT_communicator...");
 	disconnect();
 	loop_stop();
-	mosqpp::lib_cleanup();
 	LOG_PRINT(LOG_DEBUG, "MQTT_communicator closed.");
 }
 
