@@ -3,6 +3,7 @@
 #include "conf.hpp"
 
 #include <boost/program_options.hpp>
+#include <mosquittopp.h>
 
 #include <unistd.h>
 #include <cstdlib>
