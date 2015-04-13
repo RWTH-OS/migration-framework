@@ -20,12 +20,10 @@ Task generate_start_task(const YAML::Node &node)
 		auto name = iter["name"].as<std::string>();
 		auto vcpus = iter["vcpus"].as<unsigned int>();
 		auto memory = iter["memory"].as<unsigned long>();
-		auto concurrent_execution = iter["concurrent_execution"] ? 
-			iter["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+		auto concurrent_execution = iter["concurrent-execution"].as<bool>(true);
 		start_tasks.push_back(std::make_shared<Start>(name, vcpus, memory, concurrent_execution));
 	}
-	auto concurrent_execution = node["concurrent_execution"] ? 
-		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+	auto concurrent_execution = node["concurrent-execution"].as<bool>(true);
 	return Task(std::move(start_tasks), concurrent_execution);
 }
 
@@ -38,12 +36,10 @@ Task generate_stop_task(const YAML::Node &node)
 		if (!iter["vm-name"])
 			throw std::invalid_argument("Invalid vm-config in stop_task found.");
 		auto vm_name = iter["vm-name"].as<std::string>();
-		auto concurrent_execution = iter["concurrent_execution"] ? 
-			iter["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+		auto concurrent_execution = iter["concurrent-execution"].as<bool>(true);
 		stop_tasks.push_back(std::make_shared<Stop>(vm_name, concurrent_execution));
 	}
-	auto concurrent_execution = node["concurrent_execution"] ? 
-		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+	auto concurrent_execution = node["concurrent-execution"].as<bool>(true);
 	return Task(std::move(stop_tasks), concurrent_execution);
 }
 
@@ -54,8 +50,7 @@ Task generate_migrate_task(const YAML::Node &node)
 	auto vm_name = node["vm-name"].as<std::string>();
 	auto destination = node["destination"].as<std::string>();
 	auto live_migration = node["parameter"]["live-migration"].as<bool>();
-	auto concurrent_execution = node["concurrent_execution"] ? 
-		node["concurrent_execution"].as<bool>() : true; // concurrent execution is default.
+	auto concurrent_execution = node["concurrent-execution"].as<bool>(true);
 	std::vector<std::shared_ptr<Sub_task>> migrate_tasks;
 	migrate_tasks.push_back(std::make_shared<Migrate>(vm_name, destination, live_migration, false));
 	return Task(std::move(migrate_tasks), concurrent_execution);
