@@ -2,6 +2,7 @@
 
 #include "parser.hpp"
 #include "logging.hpp"
+#include "hooks.hpp"
 
 #include <exception>
 #include <future>
@@ -116,12 +117,12 @@ std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution, bool pscom_hook_enabled) :
+Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution, unsigned int pscom_hook_procs) :
 	Sub_task::Sub_task(concurrent_execution),
 	vm_name(vm_name),
 	dest_hostname(dest_hostname),
 	live_migration(live_migration),
-	pscom_hook_enabled(pscom_hook_enabled)
+	pscom_hook_procs(pscom_hook_procs)
 {
 }
 
@@ -131,35 +132,16 @@ std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervis
 	auto func = [&hypervisor, this_copy] ()
 	{
 		try {
-			this_copy.pre_hooks();
+			// Suspend pscom
+			Suspend_pscom pscom_hook(this_copy.vm_name, this_copy.pscom_hook_procs);
+			// Start migration
 			hypervisor->migrate(this_copy.vm_name, this_copy.dest_hostname, this_copy.live_migration);
-			this_copy.post_hooks();
+			// Resume pscom
+			pscom_hook.resume();
 		} catch (const std::exception &e) {
 			return Result("migrate done", this_copy.vm_name, "error", e.what());
 		}
 		return Result("migrate done", this_copy.vm_name, "success", "");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
-}
-
-void Migrate::pre_hooks() const
-{
-	if (pscom_hook_enabled)
-		pre_pscom_hook();
-}
-
-void Migrate::post_hooks() const
-{
-	if (pscom_hook_enabled)
-		post_pscom_hook();
-}
-
-void Migrate::pre_pscom_hook() const
-{
-	/// \todo Implementation
-}
-
-void Migrate::post_pscom_hook() const
-{
-	/// \todo Implementation
 }

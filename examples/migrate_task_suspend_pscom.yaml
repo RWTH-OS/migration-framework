@@ -4,4 +4,5 @@ vm-name: anthe1
 destination: pandora2
 parameter:
   live-migration: false
+  pscom-hook-procs: 1
 ...
