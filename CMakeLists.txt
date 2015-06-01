@@ -102,14 +102,18 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
-	${PROJECT_SOURCE_DIR}/src/serializable.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/mqtt_communicator.cpp
 	${PROJECT_SOURCE_DIR}/src/parser.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
-	${PROJECT_SOURCE_DIR}/src/serializable.cpp
 )
+
+# fast-lib
+include_directories(${PROJECT_SOURCE_DIR})
+add_subdirectory(${PROJECT_SOURCE_DIR}/fast-lib)
+list(APPEND LIBS fastlib_serialization)
+list(APPEND LIBS_BENCHMARK fastlib_serialization)
 
 ### Add config files
 # Doxygen documentation generation

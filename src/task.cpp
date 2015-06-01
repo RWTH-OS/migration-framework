@@ -6,6 +6,7 @@
 #include <exception>
 #include <future>
 #include <utility>
+#include <iostream>
 
 Thread_counter::Thread_counter()
 {
@@ -48,16 +49,17 @@ YAML::Node Result::emit() const
 	node["result"] = title;
 	node["vm-name"] = vm_name;
 	node["status"] = status;
-	node["details"] = details;
+	if (details != "")
+		node["details"] = details;
 	return node;
 }
 
 void Result::load(const YAML::Node &node)
 {
-	title = node["result"].as<std::string>();
-	vm_name = node["vm-name"].as<std::string>();
-	status = node["status"].as<std::string>();
-	details = node["details"].as<std::string>();
+	fast::load(title, node["result"]);
+	fast::load(vm_name, node["vm-name"]);
+	fast::load(status, node["status"]);
+	fast::load(details, node["details"], "");
 }
 
 Sub_task::Sub_task(bool concurrent_execution) :
@@ -74,7 +76,9 @@ YAML::Node Sub_task::emit() const
 
 void Sub_task::load(const YAML::Node &node)
 {
-	concurrent_execution = node["concurrent-execution"].as<bool>();
+	std::cout << "1" << std::endl;
+	fast::load(concurrent_execution, node["concurrent-execution"], true);
+	std::cout << "2" << std::endl;
 }
 
 Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_execution) :
@@ -87,11 +91,11 @@ std::string Task::type() const
 	if (sub_tasks.empty())
 		throw std::runtime_error("No subtasks available to get test type.");
 	else if (std::dynamic_pointer_cast<Start>(sub_tasks.front()))
-		return "start";
+		return "start vm";
 	else if (std::dynamic_pointer_cast<Stop>(sub_tasks.front()))
-		return "stop";
+		return "stop vm";
 	else if (std::dynamic_pointer_cast<Migrate>(sub_tasks.front()))
-		return "migrate";
+		return "migrate vm";
 	else
 		throw std::runtime_error("Unknown type of Task.");
 
@@ -101,29 +105,49 @@ YAML::Node Task::emit() const
 {
 	YAML::Node node;
 	node["task"] = type();
-	node["list"] = sub_tasks;
+	node["vm-configurations"] = sub_tasks;
 	node["concurrent-execution"] = concurrent_execution;
 	return node;
 }
 
 template<class T> std::vector<std::shared_ptr<Sub_task>> load_sub_tasks(const YAML::Node &node)
 {
-	std::vector<std::shared_ptr<T>> buf = node["list"].as<decltype(buf)>();
-	return std::vector<std::shared_ptr<Sub_task>>(buf.begin(), buf.end());
+	std::vector<std::shared_ptr<T>> sub_tasks;
+	fast::load(sub_tasks, node["vm-configurations"]);
+	return std::vector<std::shared_ptr<Sub_task>>(sub_tasks.begin(), sub_tasks.end());
+}
+
+// Specialization for Migrate due to different yaml structure (no "vm-configurations")
+template<> std::vector<std::shared_ptr<Sub_task>> load_sub_tasks<Migrate>(const YAML::Node &node)
+{
+	std::shared_ptr<Migrate> migrate_task;
+	fast::load(migrate_task, node);
+	return std::vector<std::shared_ptr<Sub_task>>(1, migrate_task);
 }
 
 void Task::load(const YAML::Node &node)
 {
-	std::string type = node["task"].as<std::string>();
-	if (type == "start")
+	std::string type;
+	try {
+		fast::load(type, node["task"]);
+	} catch (const std::exception &e) {
+		throw Task::no_task_exception("Cannot find key \"task\" to load Task from YAML.");
+	}
+	if (type == "start vm") {
+		std::cout << "Loading start sub tasks" << std::endl;
 		sub_tasks = load_sub_tasks<Start>(node);
-	else if (type == "stop")
+	}
+	else if (type == "stop vm") {
+		std::cout << "Loading stop sub tasks" << std::endl;
 		sub_tasks = load_sub_tasks<Stop>(node);
-	else if (type == "migrate")
+	}
+	else if (type == "migrate vm") {
+		std::cout << "Loading migrate sub tasks" << std::endl;
 		sub_tasks = load_sub_tasks<Migrate>(node);
+	}
 	else
 		throw std::runtime_error("Unknown type of Task while loading.");
-	concurrent_execution = node["concurrent-execution"].as<bool>();
+	fast::load(concurrent_execution, node["concurrent-execution"], true);
 }
 
 void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm)
@@ -164,9 +188,9 @@ YAML::Node Start::emit() const
 void Start::load(const YAML::Node &node)
 {
 	Sub_task::load(node);
-	vm_name = node["vm-name"].as<std::string>();
-	vcpus = node["vcpus"].as<unsigned int>();
-	memory = node["memory"].as<unsigned long>();
+	fast::load(vm_name, node["vm-name"]);
+	fast::load(vcpus, node["vcpus"]);
+	fast::load(memory, node["memory"]);
 }
 
 std::future<Result> Start::execute(const std::shared_ptr<Hypervisor> &hypervisor)
@@ -202,7 +226,7 @@ YAML::Node Stop::emit() const
 void Stop::load(const YAML::Node &node)
 {
 	Sub_task::load(node);
-	vm_name = node["vm-name"].as<std::string>();
+	fast::load(vm_name, node["vm-name"]);
 }
 
 std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
@@ -240,9 +264,9 @@ YAML::Node Migrate::emit() const
 void Migrate::load(const YAML::Node &node)
 {
 	Sub_task::load(node);
-	vm_name = node["vm-name"].as<std::string>();
-	dest_hostname = node["destination"].as<std::string>();
-	live_migration = node["live-migration"].as<bool>();
+	fast::load(vm_name, node["vm-name"]);
+	fast::load(dest_hostname, node["destination"]);
+	fast::load(live_migration, node["live-migration"]);
 }
 
 std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervisor)

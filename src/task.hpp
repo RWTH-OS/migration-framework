@@ -4,7 +4,8 @@
 #include "hypervisor.hpp"
 
 #include "communicator.hpp"
-#include "serializable.hpp"
+
+#include <fast-lib/serialization/serializable.hpp>
 
 #include <string>
 #include <vector>
@@ -124,6 +125,13 @@ public:
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
+
+	class no_task_exception : std::runtime_error
+	{
+	public:
+		no_task_exception(const std::string &str) : std::runtime_error(str)
+		{}
+	};
 private:
 	std::vector<std::shared_ptr<Sub_task>> sub_tasks;
 	bool concurrent_execution;
