@@ -12,8 +12,6 @@
 #include "task.hpp"
 #include "communicator.hpp"
 
-#include <yaml-cpp/yaml.h>
-
 #include <memory>
 #include <vector>
 #include <string>
@@ -53,5 +51,6 @@ namespace parser
 	 */
 	std::shared_ptr<Communicator> str_to_communicator(const std::string &str);
 };
+
 
 #endif

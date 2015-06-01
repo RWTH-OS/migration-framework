@@ -43,11 +43,15 @@ void Task_handler::loop()
 		std::string msg;
 		try {
 			msg = comm->get_message();
-			parser::str_to_task(msg).execute(hypervisor, comm);
+			Task task;	
+			task.from_string(msg);
+			task.execute(hypervisor, comm);
 		} catch (const YAML::Exception &e) {
 			LOG_PRINT(LOG_ERR, "Exception while parsing message.");
 			LOG_STREAM(LOG_ERR, e.what());
 			LOG_STREAM(LOG_ERR, "msg dump: " << msg);
+		} catch (const Task::no_task_exception &e) {
+			LOG_PRINT(LOG_DEBUG, "Parsed message not being a Task.");
 		} catch (const std::exception &e) {
 			if (e.what() == std::string("quit")) {
 				running = false;
