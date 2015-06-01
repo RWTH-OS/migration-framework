@@ -84,9 +84,7 @@ YAML::Node Sub_task::emit() const
 
 void Sub_task::load(const YAML::Node &node)
 {
-	std::cout << "1" << std::endl;
 	fast::load(concurrent_execution, node["concurrent-execution"], true);
-	std::cout << "2" << std::endl;
 }
 
 Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_execution) :
@@ -142,15 +140,12 @@ void Task::load(const YAML::Node &node)
 		throw Task::no_task_exception("Cannot find key \"task\" to load Task from YAML.");
 	}
 	if (type == "start vm") {
-		std::cout << "Loading start sub tasks" << std::endl;
 		sub_tasks = load_sub_tasks<Start>(node);
 	}
 	else if (type == "stop vm") {
-		std::cout << "Loading stop sub tasks" << std::endl;
 		sub_tasks = load_sub_tasks<Stop>(node);
 	}
 	else if (type == "migrate vm") {
-		std::cout << "Loading migrate sub tasks" << std::endl;
 		sub_tasks = load_sub_tasks<Migrate>(node);
 	}
 	else
