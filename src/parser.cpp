@@ -10,7 +10,6 @@
 
 #include "task.hpp"
 #include "mqtt_communicator.hpp"
-#include "logging.hpp"
 
 #include <stdexcept>
 #include <iostream>
@@ -68,7 +67,7 @@ Task str_to_task(const std::string &str)
 {
 	YAML::Node node = YAML::Load(str);
 	if (node["task"]) {
-		LOG_PRINT(LOG_DEBUG, "Parsing task...");
+//		LOG_PRINT(LOG_DEBUG, "Parsing task...");
 		auto task_name = node["task"].as<std::string>();
 		if (task_name == "start vm")
 			return generate_start_task(node);
@@ -81,7 +80,7 @@ Task str_to_task(const std::string &str)
 		else
 			throw std::invalid_argument("Unknown task_name.");
 	} else if (node["result"]) {
-		LOG_PRINT(LOG_DEBUG, "Parsing result...");
+//		LOG_PRINT(LOG_DEBUG, "Parsing result...");
 		return Task();
 	} else {
 		throw std::invalid_argument("Unknown message type.");

@@ -7,8 +7,6 @@
  */
 
 #include "task_handler.hpp"
-#include "logging.hpp"
-#include "conf.hpp"
 
 #include <boost/program_options.hpp>
 
@@ -37,11 +35,11 @@ int main(int argc, char *argv[])
 		if (vm.count("config"))
 			config_file_name = vm["config"].as<std::string>();
 		Task_handler task_handler(config_file_name);
-		LOG_PRINT(LOG_DEBUG, "task_handler loop started.");
+		std::cout << "Debug: task_handler loop started." << std::endl;
 		task_handler.loop();
-		LOG_PRINT(LOG_DEBUG, "task_handler loop closed.");
+		std::cout << "Debug: task_handler loop closed." << std::endl;
 	} catch (const std::exception &e) {
-		LOG_STREAM(LOG_ERR, "Exception: " << e.what());
+		std::cout << "Exception: " << e.what() << std::endl;
 	}
 	return EXIT_SUCCESS;
 }

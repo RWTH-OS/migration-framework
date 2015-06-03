@@ -8,13 +8,13 @@
 
 #include "libvirt_hypervisor.hpp"
 
-#include "logging.hpp"
-
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
+
 #include <stdexcept>
 #include <thread>
 #include <memory>
+#include <iostream>
 
 
 /// TODO: Get hostname dynamically.
@@ -28,7 +28,7 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
 	if (virConnectClose(local_host_conn)) {
-		LOG_PRINT(LOG_WARNING, "Some qemu connections have not been closed after destruction of hypervisor wrapper!");
+		std::cout << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!" << std::endl;
 	}
 }
 

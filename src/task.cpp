@@ -9,7 +9,6 @@
 #include "task.hpp"
 
 #include "parser.hpp"
-#include "logging.hpp"
 
 #include <exception>
 #include <future>
@@ -31,11 +30,11 @@ Thread_counter::~Thread_counter()
 
 void Thread_counter::wait_for_threads_to_finish()
 {
-	LOG_PRINT(LOG_DEBUG, "Waiting for threads to finish...");
+	std::cout << "Debug: Waiting for threads to finish..." << std::endl;
 	std::unique_lock<std::mutex> lock(count_mutex);
 	while (count != 0)
 		count_cv.wait(lock);
-	LOG_PRINT(LOG_DEBUG, "All threads are finished.");
+	std::cout << "Debug: All threads are finished." << std::endl;
 }
 
 unsigned int Thread_counter::count;
