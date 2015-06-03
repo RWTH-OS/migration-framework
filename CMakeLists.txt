@@ -69,8 +69,14 @@ else()
 endif()
 
 # Find libvirt
-#TODO: Implementation of find_package module for libvirt
-list(APPEND LIBS "virt")
+find_package(LibVirt REQUIRED)
+if(LIBVIRT_FOUND)
+	include_directories(SYSTEM ${LibVirt_INCLUDE_DIR})
+	list(APPEND LIBS "${LibVirt_LIBRARY}")
+else()
+
+	message(SEND_ERROR "libvirt is required.")
+endif()
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
