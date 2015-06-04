@@ -88,7 +88,6 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/mqtt_communicator.cpp
-	${PROJECT_SOURCE_DIR}/src/parser.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 )
 
@@ -99,6 +98,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/fast-lib/CMakeLists.txt")
 else()
 	add_subdirectory(${PROJECT_SOURCE_DIR}/fast-lib)
 	list(APPEND LIBS fastlib_serialization)
+	list(APPEND LIBS fastlib_communication)
 	list(APPEND LIBS_BENCHMARK fastlib_serialization)
 endif()
 

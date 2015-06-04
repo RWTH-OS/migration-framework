@@ -8,11 +8,11 @@
 
 #include "task_handler.hpp"
 
-#include "mqtt_communicator.hpp"
 #include "libvirt_hypervisor.hpp"
 #include "parser.hpp"
 #include "task.hpp"
 
+#include <fast-lib/communication/mqtt_communicator.hpp>
 #include <mosquittopp.h>
 
 #include <string>

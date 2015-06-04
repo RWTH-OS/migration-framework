@@ -11,8 +11,7 @@
 
 #include "hypervisor.hpp"
 
-#include "communicator.hpp"
-
+#include <fast-lib/communication/communicator.hpp>
 #include <fast-lib/serialization/serializable.hpp>
 
 #include <string>
@@ -62,8 +61,8 @@ private:
  */
 struct Result : public fast::Serializable
 {
-	Result(const std::string &title, const std::string &vm_name, const std::string &status, const std::string &details);
-	std::string title;
+	Result() = default;
+	Result(const std::string &vm_name, const std::string &status, const std::string &details = "");
 	std::string vm_name;
 	std::string status;
 	std::string details;
@@ -72,6 +71,24 @@ struct Result : public fast::Serializable
 	void load(const YAML::Node &node) override;
 };
 YAML_CONVERT_IMPL(Result)
+
+/**
+ * \brief Contains a vector of results and enables proper YAML conversion.
+ *
+ * A Result_container is neccesary to convert results to YAML in the right format.
+ */
+struct Result_container : public fast::Serializable
+{
+	Result_container() = default;
+	Result_container(const std::string &yaml_str);
+	Result_container(const std::string &title, const std::vector<Result> &results);
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
+	std::string title;
+	std::vector<Result> results;
+};
+YAML_CONVERT_IMPL(Result_container)
 
 /**
  * \brief An abstract class to provide an interface for a Sub_task.
@@ -129,7 +146,7 @@ public:
 	 * \param hypervisor Hypervisor to be used for execution.
 	 * \param comm Communicator to be used to send results.
 	 */
-	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm);
+	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<fast::Communicator> &comm);
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
@@ -144,7 +161,13 @@ private:
 	std::vector<std::shared_ptr<Sub_task>> sub_tasks;
 	bool concurrent_execution;
 
-	std::string type() const;
+	/**
+	 * \brief Get readable type of tasks.
+	 *
+	 * Returned type is the same format as in YAML (task:/result:).
+	 * \param enable_result_format Set to true if type should be stored in Result, else Task format is used.
+	 */
+	std::string type(bool enable_result_format = false) const;
 };
 YAML_CONVERT_IMPL(Task)
 

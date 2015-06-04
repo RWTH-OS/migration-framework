@@ -14,6 +14,7 @@
 #include <future>
 #include <utility>
 #include <iostream>
+#include <array>
 
 Thread_counter::Thread_counter()
 {
@@ -41,9 +42,32 @@ unsigned int Thread_counter::count;
 std::mutex Thread_counter::count_mutex;
 std::condition_variable Thread_counter::count_cv;
 
+Result_container::Result_container(const std::string &yaml_str)
+{
+	from_string(yaml_str);
+}
 
-Result::Result(const std::string &title, const std::string &vm_name, const std::string &status, const std::string &details) :
+Result_container::Result_container(const std::string &title, const std::vector<Result> &results) :
 	title(title),
+	results(results)
+{
+}
+
+YAML::Node Result_container::emit() const
+{
+	YAML::Node node;
+	node["result"] = title;
+	node["list"] = results;
+	return node;
+}
+
+void Result_container::load(const YAML::Node &node)
+{
+	fast::load(title, node["result"]);
+	fast::load(results, node["list"]);
+}
+
+Result::Result(const std::string &vm_name, const std::string &status, const std::string &details) :
 	vm_name(vm_name),
 	status(status),
 	details(details)
@@ -53,7 +77,6 @@ Result::Result(const std::string &title, const std::string &vm_name, const std::
 YAML::Node Result::emit() const
 {
 	YAML::Node node;
-	node["result"] = title;
 	node["vm-name"] = vm_name;
 	node["status"] = status;
 	if (details != "")
@@ -63,7 +86,6 @@ YAML::Node Result::emit() const
 
 void Result::load(const YAML::Node &node)
 {
-	fast::load(title, node["result"]);
 	fast::load(vm_name, node["vm-name"]);
 	fast::load(status, node["status"]);
 	fast::load(details, node["details"], "");
@@ -91,20 +113,26 @@ Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_exe
 {
 }
 
-std::string Task::type() const
+std::string Task::type(bool enable_result_format) const
 {
+	std::array<std::string, 3> types;
+	if (enable_result_format)
+		types = {"vm started", "vm stopped", "migrate done"};
+	else
+		types = {"start vm", "stop vm", "migrate vm"};
 	if (sub_tasks.empty())
-		throw std::runtime_error("No subtasks available to get test type.");
+		throw std::runtime_error("No subtasks available to get type.");
 	else if (std::dynamic_pointer_cast<Start>(sub_tasks.front()))
-		return "start vm";
+		return types[0];
 	else if (std::dynamic_pointer_cast<Stop>(sub_tasks.front()))
-		return "stop vm";
+		return types[1];
 	else if (std::dynamic_pointer_cast<Migrate>(sub_tasks.front()))
-		return "migrate vm";
+		return types[2];
 	else
 		throw std::runtime_error("Unknown type of Task.");
 
 }
+
 
 YAML::Node Task::emit() const
 {
@@ -152,12 +180,13 @@ void Task::load(const YAML::Node &node)
 	fast::load(concurrent_execution, node["concurrent-execution"], true);
 }
 
-void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm)
+void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<fast::Communicator> &comm)
 {
 	if (sub_tasks.empty()) return;
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &sub_tasks = this->sub_tasks;
-	auto func = [&hypervisor, &comm, sub_tasks] 
+	auto result_type = type();
+	auto func = [&hypervisor, &comm, sub_tasks, result_type] 
 	{
 		std::vector<std::future<Result>> future_results;
 		for (auto &sub_task : sub_tasks) // start subtasks
@@ -165,7 +194,7 @@ void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::sha
 		std::vector<Result> results;
 		for (auto &future_result : future_results) // wait for subtasks to finish
 			results.push_back(future_result.get());
-		comm->send_message(parser::results_to_str(results));
+		comm->send_message(Result_container(result_type, results).to_string());
 	};
 	concurrent_execution ? std::thread([func]{Thread_counter cnt; func();}).detach() : func();
 }
@@ -181,7 +210,7 @@ Start::Start(const std::string &vm_name, unsigned int vcpus, unsigned long memor
 YAML::Node Start::emit() const
 {
 	YAML::Node node = Sub_task::emit();
-	node["vm-name"] = vm_name;
+	node["name"] = vm_name;
 	node["vcpus"] = vcpus;
 	node["memory"] = memory;
 	return node;
@@ -190,7 +219,7 @@ YAML::Node Start::emit() const
 void Start::load(const YAML::Node &node)
 {
 	Sub_task::load(node);
-	fast::load(vm_name, node["vm-name"]);
+	fast::load(vm_name, node["name"]);
 	fast::load(vcpus, node["vcpus"]);
 	fast::load(memory, node["memory"]);
 }
@@ -205,9 +234,9 @@ std::future<Result> Start::execute(const std::shared_ptr<Hypervisor> &hypervisor
 		try {
 			hypervisor->start(vm_name, vcpus, memory);
 		} catch (const std::exception &e) {
-			return Result("vm started", vm_name, "error", e.what());
+			return Result(vm_name, "error", e.what());
 		}
-		return Result("vm started", vm_name, "success", "");
+		return Result(vm_name, "success");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
@@ -239,9 +268,9 @@ std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
 		try {
 			hypervisor->stop(vm_name);
 		} catch (const std::exception &e) {
-			return Result("vm stopped", vm_name, "error", e.what());
+			return Result(vm_name, "error", e.what());
 		}
-		return Result("vm stopped", vm_name, "success", "");
+		return Result(vm_name, "success");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
@@ -281,9 +310,9 @@ std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervis
 		try {
 			hypervisor->migrate(vm_name, dest_hostname, live_migration);
 		} catch (const std::exception &e) {
-			return Result("migrate done", vm_name, "error", e.what());
+			return Result(vm_name, "error", e.what());
 		}
-		return Result("migrate done", vm_name, "success", "");
+		return Result(vm_name, "success");
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
