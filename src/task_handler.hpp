@@ -12,8 +12,10 @@
 #include "hypervisor.hpp"
 
 #include <fast-lib/communication/communicator.hpp>
+#include <fast-lib/serialization/serializable.hpp>
 
 #include <memory>
+#include <string>
 
 /**
  * \brief Class to handle incoming tasks.
@@ -23,13 +25,14 @@
  * The specialized type of Hypervisor and Communicator are defined in a config file which is parsed on construction
  * of the Task_handler.
  */
-class Task_handler
+class Task_handler : fast::Serializable
 {
 public:
 	/**
 	 * \brief Construct a Task_handler.
 	 *
 	 * Parses the config file using the parser and constructs specialized Communicator and Hypervisor.
+	 * Config file must be in YAML.
 	 * \param config_file The name of the config file to parse.
 	 */
 	Task_handler(const std::string &config_file);
@@ -46,6 +49,20 @@ public:
 	 * generated Task by using the Hypervisor.
 	 */
 	void loop();
+	/**
+	 * \brief Emits Task_handler to YAML::Node.
+	 *
+	 * Implements fast::Serializable::emit().
+	 * Dummy implementation which always throws, due to lack of need for this method.
+	 */
+	YAML::Node emit() const override;
+	/**
+	 * \brief Loads Task_handler from YAML::Node.
+	 *
+	 * Implements fast::Serializable::load().
+	 * Creates the Communicator and Hypervisor from YAML.
+	 */
+	void load(const YAML::Node &node) override;
 private:
 	std::shared_ptr<fast::Communicator> comm;
 	std::shared_ptr<Hypervisor> hypervisor;
