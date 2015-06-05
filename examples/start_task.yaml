@@ -3,8 +3,8 @@ task: start vm
 vm-configurations: 
   - name: anthe1
     vcpus: 1
-    memory: 1024
-  - name: anthe2
+    memory: 1048576
+  - name: centos660
     vcpus: 1
-    memory: 512
+    memory: 524288
 ...
