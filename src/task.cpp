@@ -117,7 +117,7 @@ std::string Task::type(bool enable_result_format) const
 {
 	std::array<std::string, 3> types;
 	if (enable_result_format)
-		types = {"vm started", "vm stopped", "migrate done"};
+		types = {"vm started", "vm stopped", "vm migrated"};
 	else
 		types = {"start vm", "stop vm", "migrate vm"};
 	if (sub_tasks.empty())
@@ -288,7 +288,7 @@ YAML::Node Migrate::emit() const
 	YAML::Node node = Sub_task::emit();
 	node["vm-name"] = vm_name;
 	node["destination"] = dest_hostname;
-	node["live-migration"] = live_migration;
+	node["parameter"]["live-migration"] = live_migration;
 	return node;
 }
 
@@ -297,7 +297,7 @@ void Migrate::load(const YAML::Node &node)
 	Sub_task::load(node);
 	fast::load(vm_name, node["vm-name"]);
 	fast::load(dest_hostname, node["destination"]);
-	fast::load(live_migration, node["live-migration"]);
+	fast::load(live_migration, node["parameter"]["live-migration"]);
 }
 
 std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervisor)

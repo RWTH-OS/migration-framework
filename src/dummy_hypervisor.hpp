@@ -16,7 +16,7 @@
  *
  * This class implements the Hypervisor interface.
  * It provides methods to start, stop and migrate virtual machines.
- * It does not really do anything, but therefore never throws.
+ * It does not really do anything, but therefore never throws if never_throw is set else always throws.
  * Only for test purposes.
  */
 class Dummy_hypervisor :
@@ -24,30 +24,41 @@ class Dummy_hypervisor :
 {
 public:
 	/**
+	 * \brief Constructor of Dummy_hypervisor.
+	 *
+	 * \param always_success Specify wheather start/stop/migrate methods succeed (true) or throw (false)
+	 */
+	Dummy_hypervisor(bool never_throw) noexcept;
+	/**
 	 * \brief Method to start a virtual machine.
 	 *
-	 * Dummy method that does not do anything and never throws.
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to start.
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory) noexcept;
+	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory);
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
-	 * Dummy method that does not do anything and never throws.
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to stop.
 	 */
-	void stop(const std::string &vm_name) noexcept;
+	void stop(const std::string &vm_name);
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
-	 * Dummy method that does not do anything and never throws.
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to migrate.
 	 * \param dest_hostname The name of the host to migrate to.
 	 * \param live_migration Enables live migration.
 	 */
-	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration) noexcept;
+	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration);
+private:
+	const bool never_throw;
 };
 
 #endif

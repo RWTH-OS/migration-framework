@@ -8,17 +8,30 @@
 
 #include "dummy_hypervisor.hpp"
 
-void Dummy_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory) noexcept
+#include <stdexcept>
+
+Dummy_hypervisor::Dummy_hypervisor(bool never_throw) noexcept :
+	never_throw(never_throw)
+{
+}
+
+void Dummy_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory)
 {
 	(void) vm_name; (void) vcpus; (void) memory;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
-void Dummy_hypervisor::stop(const std::string &vm_name) noexcept
+void Dummy_hypervisor::stop(const std::string &vm_name) 
 {
 	(void) vm_name;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
-void Dummy_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration) noexcept
+void Dummy_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration) 
 {
 	(void) vm_name; (void) dest_hostname; (void) live_migration;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }

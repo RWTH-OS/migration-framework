@@ -1,5 +1,5 @@
 ---
-task: migrate start
+task: migrate vm
 vm-name: anthe1
 destination: pandora2
 parameter:

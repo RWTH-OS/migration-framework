@@ -57,7 +57,9 @@ std::pair<std::shared_ptr<fast::Communicator>, std::shared_ptr<Hypervisor>> pars
 		if (type == "libvirt") {
 			hypervisor = std::make_shared<Libvirt_hypervisor>();
 		} else if (type == "dummy") {
-			hypervisor = std::make_shared<Dummy_hypervisor>();
+			if (!hypervisor_node["never-throw"])
+				throw std::invalid_argument("Defective configuration for dummy hypervisor.");
+			hypervisor = std::make_shared<Dummy_hypervisor>(hypervisor_node["never-throw"].as<bool>());
 		} else {
 			throw std::invalid_argument("Unknown communcation type in configuration found");
 		}
