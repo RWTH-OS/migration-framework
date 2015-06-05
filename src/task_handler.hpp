@@ -1,10 +1,19 @@
+/*
+ * This file is part of migration-framework.
+ * Copyright (C) 2015 RWTH Aachen University - ACS
+ *
+ * This file is licensed under the GNU Lesser General Public License Version 3
+ * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
+ */
+
 #ifndef TASK_HANDLER_HPP
 #define TASK_HANDLER_HPP
 
-#include <memory>
-
-#include "communicator.hpp"
 #include "hypervisor.hpp"
+
+#include <fast-lib/communication/communicator.hpp>
+
+#include <memory>
 
 /**
  * \brief Class to handle incoming tasks.
@@ -38,7 +47,7 @@ public:
 	 */
 	void loop();
 private:
-	std::shared_ptr<Communicator> comm;
+	std::shared_ptr<fast::Communicator> comm;
 	std::shared_ptr<Hypervisor> hypervisor;
 	bool running;
 };

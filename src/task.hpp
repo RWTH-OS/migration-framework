@@ -1,9 +1,18 @@
+/*
+ * This file is part of migration-framework.
+ * Copyright (C) 2015 RWTH Aachen University - ACS
+ *
+ * This file is licensed under the GNU Lesser General Public License Version 3
+ * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
+ */
+
 #ifndef TASK_HPP
 #define TASK_HPP
 
 #include "hypervisor.hpp"
 
-#include "communicator.hpp"
+#include <fast-lib/communication/communicator.hpp>
+#include <fast-lib/serialization/serializable.hpp>
 
 #include <string>
 #include <vector>
@@ -50,21 +59,44 @@ private:
  *
  * Results are sent back packed in a vector representing all results of a Task.
  */
-struct Result
+struct Result : public fast::Serializable
 {
-	Result(const std::string &title, const std::string &vm_name, const std::string &status, const std::string &details);
-	std::string title;
+	Result() = default;
+	Result(const std::string &vm_name, const std::string &status, const std::string &details = "");
 	std::string vm_name;
 	std::string status;
 	std::string details;
+
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 };
+YAML_CONVERT_IMPL(Result)
+
+/**
+ * \brief Contains a vector of results and enables proper YAML conversion.
+ *
+ * A Result_container is neccesary to convert results to YAML in the right format.
+ */
+struct Result_container : public fast::Serializable
+{
+	Result_container() = default;
+	Result_container(const std::string &yaml_str);
+	Result_container(const std::string &title, const std::vector<Result> &results);
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
+	std::string title;
+	std::vector<Result> results;
+};
+YAML_CONVERT_IMPL(Result_container)
 
 /**
  * \brief An abstract class to provide an interface for a Sub_task.
  */
-class Sub_task
+class Sub_task : public fast::Serializable
 {
 public:
+	Sub_task() = default;
 	/**
 	 * \brief Constructor for Sub_task.
 	 *
@@ -73,9 +105,13 @@ public:
 	Sub_task(bool concurrent_execution);
 	virtual ~Sub_task(){};
 	virtual std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor) = 0;
+
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 protected:
 	bool concurrent_execution;
 };
+YAML_CONVERT_IMPL(Sub_task)
 
 /**
  * \brief Generic task class containing sub tasks.
@@ -83,7 +119,8 @@ protected:
  * Contains several Sub_tasks and executes those.
  * Task_handler will call execute method to execute the task.
  */
-class Task
+class Task :
+	public fast::Serializable
 {
 public:
 	/**
@@ -109,11 +146,30 @@ public:
 	 * \param hypervisor Hypervisor to be used for execution.
 	 * \param comm Communicator to be used to send results.
 	 */
-	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<Communicator> &comm);
+	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<fast::Communicator> &comm);
+
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
+	class no_task_exception : std::runtime_error
+	{
+	public:
+		no_task_exception(const std::string &str) : std::runtime_error(str)
+		{}
+	};
 private:
 	std::vector<std::shared_ptr<Sub_task>> sub_tasks;
 	bool concurrent_execution;
+
+	/**
+	 * \brief Get readable type of tasks.
+	 *
+	 * Returned type is the same format as in YAML (task:/result:).
+	 * \param enable_result_format Set to true if type should be stored in Result, else Task format is used.
+	 */
+	std::string type(bool enable_result_format = false) const;
 };
+YAML_CONVERT_IMPL(Task)
 
 /**
  * \brief Sub_task to start a single virtual machine.
@@ -122,6 +178,7 @@ class Start :
 	public Sub_task
 {
 public:
+	Start() = default;
 	/**
 	 * \brief Constructor for Start sub task.
 	 *
@@ -130,7 +187,7 @@ public:
 	 * \param memory The ram to assign to the virtual machine in MiB.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Start(const std::string &vm_name, size_t vcpus, size_t memory, bool concurrent_execution);
+	Start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, bool concurrent_execution);
 
 	/**
 	 * \brief Execute the Sub_task.
@@ -140,11 +197,14 @@ public:
 	 */
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
 private:
 	std::string vm_name;
-	size_t vcpus;
-	size_t memory;
+	unsigned int vcpus;
+	unsigned long memory;
 };
+YAML_CONVERT_IMPL(Start)
 
 /**
  * \brief Sub_task to stop a single virtual machine.
@@ -153,6 +213,7 @@ class Stop :
 	public Sub_task
 {
 public:
+	Stop() = default;
 	/**
 	 * \brief Constructor for Stop sub task.
 	 *
@@ -169,9 +230,13 @@ public:
 	 */
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
 private:
 	std::string vm_name;
 };
+YAML_CONVERT_IMPL(Stop)
 
 /**
  * \brief Sub_task to migrate a virtual machine.
@@ -180,6 +245,7 @@ class Migrate :
 	public Sub_task
 {
 public:
+	Migrate() = default;
 	/**
 	 * \brief Constructor for Migrate sub task.
 	 *
@@ -198,11 +264,15 @@ public:
 	 */
 	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
 
+	YAML::Node emit() const override;
+	void load(const YAML::Node &node) override;
+
 private:
 	std::string vm_name;
 	std::string dest_hostname;
 	bool live_migration;
 	unsigned int pscom_hook_procs;
 };
+YAML_CONVERT_IMPL(Migrate)
 
 #endif

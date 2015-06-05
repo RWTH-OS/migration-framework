@@ -1,9 +1,18 @@
-#include "mqtt_communicator.hpp"
-#include "parser.hpp"
+/*
+ * This file is part of migration-framework.
+ * Copyright (C) 2015 RWTH Aachen University - ACS
+ *
+ * This file is licensed under the GNU Lesser General Public License Version 3
+ * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
+ */
 
+#include "mqtt_communicator.hpp"
+
+#include "task.hpp"
 #include <boost/program_options.hpp>
 
 #include <iostream>
+#include <thread>
 #include <cstdlib>
 #include <chrono>
 #include <fstream>
@@ -90,8 +99,8 @@ int main(int argc, char *argv[])
 		do {
 			try {
 				comm.send_message(start_task, "topic-a");
-				auto results = parser::str_to_results(comm.get_message(std::chrono::seconds(1)));
-				if (results[0].title == "vm started" && results[0].status != "success")
+				Result_container result_container(comm.get_message(std::chrono::seconds(1)));
+				if (result_container.title == "vm started" && result_container.results[0].status != "success")
 					throw std::runtime_error("Error while starting vm.");
 			} catch (const std::runtime_error &e) {
 				if (e.what() == std::string("Timeout while waiting for message.")) {
@@ -112,14 +121,14 @@ int main(int argc, char *argv[])
 			auto start = std::chrono::high_resolution_clock::now();
 			// migrate to b
 			comm.send_message(migrate_to_b_task, "topic-a");
-			auto results = parser::str_to_results(comm.get_message());
-			if (results[0].title == "migrate done" && results[0].status != "success")
+			Result_container result_container(comm.get_message());
+			if (result_container.title == "migrate done" && result_container.results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
 			// migrate to a	
 			comm.send_message(migrate_to_a_task, "topic-b");
-			results = parser::str_to_results(comm.get_message());
-			if (results[0].title == "migrate done" && results[0].status != "success")
+			result_container.from_string(comm.get_message());
+			if (result_container.title == "migrate done" && result_container.results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
 			auto end = std::chrono::high_resolution_clock::now();
@@ -130,7 +139,7 @@ int main(int argc, char *argv[])
 		// stop vm
 		std::cout << "Stopping VMs." << std::endl;
 		comm.send_message(stop_task, "topic-a");
-		if (parser::str_to_results(comm.get_message())[0].status != "success")
+		if (Result_container(comm.get_message()).results[0].status != "success")
 			throw std::runtime_error("Migration failed.");
 
 		// print results

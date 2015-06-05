@@ -1,9 +1,17 @@
+/*
+ * This file is part of migration-framework.
+ * Copyright (C) 2015 RWTH Aachen University - ACS
+ *
+ * This file is licensed under the GNU Lesser General Public License Version 3
+ * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
+ */
+
 #include "mqtt_communicator.hpp"
 
-#include "logging.hpp"
 
 #include <stdexcept>
 #include <cstdlib>
+#include <iostream>
 
 MQTT_communicator::MQTT_communicator(const std::string &id, 
 				     const std::string &subscribe_topic,
@@ -19,52 +27,55 @@ MQTT_communicator::MQTT_communicator(const std::string &id,
 	port(port),
 	keepalive(keepalive)
 {
-	LOG_PRINT(LOG_DEBUG, "Initializing MQTT_communicator...");
+	std::cout << "Initializing MQTT_communicator..." << std::endl;
+	std::cout << "Topic: " << subscribe_topic << ", Host: " << host << std::endl;
+	mosqpp::lib_init();
 	loop_start();
 	connect_async(host.c_str(), port, keepalive);
 	subscribe(nullptr, subscribe_topic.c_str(), 2);
-	LOG_PRINT(LOG_DEBUG, "MQTT_communicator initialized.");
+//	LOG_PRINT(LOG_DEBUG, "MQTT_communicator initialized.");
 }
 
 MQTT_communicator::~MQTT_communicator()
 {
-	LOG_PRINT(LOG_DEBUG, "Closing MQTT_communicator...");
+//	LOG_PRINT(LOG_DEBUG, "Closing MQTT_communicator...");
 	disconnect();
 	loop_stop();
-	LOG_PRINT(LOG_DEBUG, "MQTT_communicator closed.");
+	mosqpp::lib_cleanup();
+//	LOG_PRINT(LOG_DEBUG, "MQTT_communicator closed.");
 }
 
 void MQTT_communicator::on_connect(int rc)
 {
 	if (rc == 0) {
-		LOG_STREAM(LOG_DEBUG, "Connection established to " << host << ":" << port);
+	std::cout << "Connection established to " << host << ":" << port << std::endl;
 	} else {
-		LOG_STREAM(LOG_ERR, "Error on connect: Code " << rc);
+	std::cout << "Error on connect: Code " << rc << std::endl;
 	}
 }
 
 void MQTT_communicator::on_disconnect(int rc)
 {
 	if (rc == 0) {
-		LOG_STREAM(LOG_DEBUG, "Disconnected from  " << host << ":" << port);
+	std::cout << "Disconnected from  " << host << ":" << port << std::endl;
 	} else {
-		LOG_STREAM(LOG_ERR, "Unexpected disconnect: Code " << rc);
+	std::cout << "Unexpected disconnect: Code " << rc << std::endl;
 	}
 }
 
 void MQTT_communicator::on_message(const mosquitto_message *msg)
 {
-	LOG_PRINT(LOG_DEBUG, "on_message executed.");
+	std::cout << "on_message executed." << std::endl;
 	mosquitto_message* buf = static_cast<mosquitto_message*>(malloc(sizeof(mosquitto_message)));
 	if (!buf) {
-		LOG_PRINT(LOG_ERR, "malloc failed allocating mosquitto_message.");
+//		LOG_PRINT(LOG_ERR, "malloc failed allocating mosquitto_message.");
 	}
 	std::lock_guard<std::mutex> lock(msg_queue_mutex);
 	messages.push(buf);
 	mosquitto_message_copy(messages.back(), msg);
 	if (messages.size() == 1)
 		msg_queue_empty_cv.notify_one();
-	LOG_PRINT(LOG_DEBUG, "Message added to queue.");
+	std::cout << "Message added to queue." << std::endl;
 }
 
 void MQTT_communicator::send_message(const std::string &message)
@@ -81,7 +92,7 @@ void MQTT_communicator::send_message(const std::string &message, const std::stri
 
 std::string MQTT_communicator::get_message()
 {
-	LOG_PRINT(LOG_DEBUG, "Wait for message.");
+	std::cout << "Wait for message." << std::endl;
 	std::unique_lock<std::mutex> lock(msg_queue_mutex);
 	while (messages.empty())
 		msg_queue_empty_cv.wait(lock);
@@ -89,13 +100,13 @@ std::string MQTT_communicator::get_message()
 	messages.pop();
 	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
 	mosquitto_message_free(&msg);
-	LOG_PRINT(LOG_DEBUG, "Message received.");
+	std::cout << "Message received." << std::endl;
 	return buf;
 }
 
 std::string MQTT_communicator::get_message(const std::chrono::duration<double> &duration)
 {
-	LOG_PRINT(LOG_DEBUG, "Wait for message.");
+//	LOG_PRINT(LOG_DEBUG, "Wait for message.");
 	std::unique_lock<std::mutex> lock(msg_queue_mutex);
 	while (messages.empty())
 		if (msg_queue_empty_cv.wait_for(lock, duration) == std::cv_status::timeout)
@@ -104,6 +115,6 @@ std::string MQTT_communicator::get_message(const std::chrono::duration<double> &
 	messages.pop();
 	std::string buf(static_cast<char*>(msg->payload), msg->payloadlen);
 	mosquitto_message_free(&msg);
-	LOG_PRINT(LOG_DEBUG, "Message received.");
+//	LOG_PRINT(LOG_DEBUG, "Message received.");
 	return buf;
 }

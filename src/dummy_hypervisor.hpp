@@ -6,40 +6,34 @@
  * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
  */
 
-#ifndef LIBVIRT_HYPERVISOR_HPP
-#define LIBVIRT_HYPERVISOR_HPP
+#ifndef DUMMY_HYPERVISOR_HPP
+#define DUMMY_HYPERVISOR_HPP
 
 #include "hypervisor.hpp"
 
-#include <libvirt/libvirt.h>
-
 /**
- * \brief Implementation of the Hypervisor interface using libvirt API.
+ * \brief Implementation of the Hypervisor interface not doing anything.
  *
  * This class implements the Hypervisor interface.
  * It provides methods to start, stop and migrate virtual machines.
- * \todo: Consider adding copy/move constructor implementation.
+ * It does not really do anything, but therefore never throws if never_throw is set else always throws.
+ * Only for test purposes.
  */
-class Libvirt_hypervisor :
+class Dummy_hypervisor :
 	public Hypervisor
 {
 public:
 	/**
-	 * \brief Constructor for Libvirt_hypervisor.
+	 * \brief Constructor of Dummy_hypervisor.
 	 *
-	 * Establishes an connection to qemu on the local host.
+	 * \param always_success Specify wheather start/stop/migrate methods succeed (true) or throw (false)
 	 */
-	Libvirt_hypervisor();
-	/**
-	 * \brief Destructor for Libvirt_hypervisor.
-	 *
-	 * Disconnects from qemu.
-	 */
-	~Libvirt_hypervisor();
+	Dummy_hypervisor(bool never_throw) noexcept;
 	/**
 	 * \brief Method to start a virtual machine.
 	 *
-	 * Calls libvirt API to start a virtual machine.
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to start.
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
@@ -48,22 +42,23 @@ public:
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
-	 * Calls libvirt API to stop a virtual machine.
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to stop.
 	 */
 	void stop(const std::string &vm_name);
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
-	 * Calls libvirt API to migrate a virtual machine to another host.
-	 * SSH access to the destination host must be available.
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to migrate.
 	 * \param dest_hostname The name of the host to migrate to.
 	 * \param live_migration Enables live migration.
 	 */
 	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration);
 private:
-	virConnectPtr local_host_conn;	
+	const bool never_throw;
 };
 
 #endif

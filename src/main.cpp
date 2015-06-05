@@ -1,6 +1,12 @@
+/*
+ * This file is part of migration-framework.
+ * Copyright (C) 2015 RWTH Aachen University - ACS
+ *
+ * This file is licensed under the GNU Lesser General Public License Version 3
+ * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
+ */
+
 #include "task_handler.hpp"
-#include "logging.hpp"
-#include "conf.hpp"
 
 #include <boost/program_options.hpp>
 #include <mosquittopp.h>
@@ -31,11 +37,11 @@ int main(int argc, char *argv[])
 		if (vm.count("config"))
 			config_file_name = vm["config"].as<std::string>();
 		Task_handler task_handler(config_file_name);
-		LOG_PRINT(LOG_DEBUG, "task_handler loop started.");
+		std::cout << "Debug: task_handler loop started." << std::endl;
 		task_handler.loop();
-		LOG_PRINT(LOG_DEBUG, "task_handler loop closed.");
+		std::cout << "Debug: task_handler loop closed." << std::endl;
 	} catch (const std::exception &e) {
-		LOG_STREAM(LOG_ERR, "Exception: " << e.what());
+		std::cout << "Exception: " << e.what() << std::endl;
 	}
 	mosqpp::lib_cleanup();
 	return EXIT_SUCCESS;
