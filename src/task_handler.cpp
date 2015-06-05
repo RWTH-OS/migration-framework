@@ -22,13 +22,12 @@
 #include <iostream>
 
 Task_handler::Task_handler(const std::string &config_file) : 
-	hypervisor(std::make_shared<Libvirt_hypervisor>()),
 	running(true)
 {
 	std::ifstream file_stream(config_file);
 	std::stringstream string_stream;
 	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
-	comm = parser::str_to_communicator(string_stream.str());
+	std::tie(comm, hypervisor) = parser::parse_config(string_stream.str());
 }
 
 Task_handler::~Task_handler()

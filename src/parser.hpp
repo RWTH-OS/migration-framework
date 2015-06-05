@@ -9,11 +9,14 @@
 #ifndef PARSER_HPP
 #define PARSER_HPP
 
+#include "hypervisor.hpp"
+
 #include <fast-lib/communication/communicator.hpp>
 
 #include <memory>
 #include <vector>
 #include <string>
+#include <utility>
 
 /**
  * \brief Namespace for parsing functions.
@@ -23,11 +26,11 @@
 namespace parser
 {
 	/**
-	 * \brief Convert yaml string to Communicator object.
+	 * \brief Convert yaml string to Communicator and Hypervisor object.
 	 *
-	 * Parses a yaml string (e.g. the config file) and generates a Communicator.
+	 * Parses a yaml string (e.g. the config file) and generates a Communicator and Hypervisor.
 	 */
-	std::shared_ptr<fast::Communicator> str_to_communicator(const std::string &str);
+	std::pair<std::shared_ptr<fast::Communicator>, std::shared_ptr<Hypervisor>> parse_config(const std::string &str);
 };
 
 

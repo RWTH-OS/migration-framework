@@ -7,10 +7,14 @@
 #
 
 ---
-id: test-id
-subscribe-topic: topic1
-publish-topic: topic1
-host: localhost
-port: 1883
-keepalive: 60
+communicator:
+  type: mqtt
+  id: test-id
+  subscribe-topic: topic1
+  publish-topic: topic1
+  host: localhost
+  port: 1883
+  keepalive: 60
+hypervisor:
+  type: libvirt
 ...
