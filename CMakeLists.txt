@@ -80,14 +80,12 @@ endif()
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
-	${PROJECT_SOURCE_DIR}/src/mqtt_communicator.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/dummy_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
-	${PROJECT_SOURCE_DIR}/src/mqtt_communicator.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 )
 
@@ -98,8 +96,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/fast-lib/CMakeLists.txt")
 else()
 	add_subdirectory(${PROJECT_SOURCE_DIR}/fast-lib)
 	list(APPEND LIBS fastlib_serialization)
-	list(APPEND LIBS fastlib_communication)
 	list(APPEND LIBS_BENCHMARK fastlib_serialization)
+	list(APPEND LIBS fastlib_communication)
+	list(APPEND LIBS_BENCHMARK fastlib_communication)
 endif()
 
 ### Add config files

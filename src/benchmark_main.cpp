@@ -6,7 +6,7 @@
  * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
  */
 
-#include "mqtt_communicator.hpp"
+#include <fast-lib/communication/mqtt_communicator.hpp>
 
 #include "task.hpp"
 #include <boost/program_options.hpp>
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	
 		// start communicator
 		std::cout << "Starting communicator." << std::endl;
-		MQTT_communicator comm("migfra-benchmark", "topic-results", "", host_name, 1883, 60);
+		fast::MQTT_communicator comm("migfra-benchmark", "topic-results", "", host_name, 1883, 60);
 	
 		// read task strings from files and replace placeholder by arguments
 		std::cout << "Reading task strings vom files." << std::endl;
