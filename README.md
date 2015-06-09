@@ -23,25 +23,34 @@ make
 
 ### Examples
 
-See directory "examples" for messages which can be parsed.
+* See directory "examples" for messages which can be parsed.
 
-To test messages:  
-1. Start mosquitto daemon (and optional redirect output).  
+* To test messages:  
+  1. Start mosquitto daemon (and optional redirect output).  
 ```bash
    mosquitto -d 2> /dev/null
 ```  
-   -d puts mosquitto in background after starting  
-2. Start migfra daemon:  
+     -d puts mosquitto in background after starting  
+
+  2. Start migfra daemon:  
 ```bash
    build/migfra
 ```  
-3. Use mosquitto\_pub to publish messages, eg.:  
+
+  3. Use mosquitto\_pub to publish messages.  
 ```bash
    mosquitto_pub -f examples/start_task.yaml -q 2 -t topic1  
 ```  
-4. Use mosquitto\_sub to see messages, eg.:  
+     -f <file> the file that contains the message content.  
+     -q <2,1,0> sets quality of service. For more information see mosquitto documentation.  
+     -t <topic> the topic to publish on.  
+
+  4. Use mosquitto\_sub to see messages.  
 ```bash
    mosquitto_sub -q 2 -t topic1  
 ```  
-To verify new examples this online yaml parser is useful:  
-http://yaml-online-parser.appspot.com
+     -q <2,1,0> sets quality of service. For more information see mosquitto documentation.  
+     -t <topic> the topic to publish on.  
+
+* To verify new examples this online yaml parser is useful:  
+  http://yaml-online-parser.appspot.com
