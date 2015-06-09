@@ -9,42 +9,39 @@ Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
 # migration-framework
 Allows for initiating start, stop, and migration of virtual machines by means of MQTT messages.
 
-#####################
-### Installation: ###
-#####################
+### Requirements
+* libmosquittopp
+* yaml-cpp
+* libvirt
 
-Requirements: 
-libmosquittopp, yaml-cpp & libvirt installed.
-
+### Build instructions
+```bash
 mkdir build && cd build
 cmake ..
 make
-make install #(not implemented yet)
+```
 
-#################
-### Examples: ###
-#################
+### Examples
 
-See examples/ for messages which can be parsed.
-To test messages:
-1. Start mosquitto daemon.
-	mosquitto &
-2. Start migfra daemon:
-	build/migfra
-3. Use mosquitto_pub to publish messages, eg.:
-	mosquitto_pub -f examples/start_task.yaml -q 2 -t topic1
-4, Use mosquitto_sub to see messages, eg.:
-	mosquitto_sub -q 2 -t topic1
-5. Look into log:
-	journalctl -n 20
+See directory "examples" for messages which can be parsed.
 
-To verify new examples this online yaml parser is useful:
+To test messages:  
+1. Start mosquitto daemon (and optional redirect output).  
+```bash
+   mosquitto -d 2> /dev/null
+```  
+   -d puts mosquitto in background after starting  
+2. Start migfra daemon:  
+```bash
+   build/migfra
+```  
+3. Use mosquitto\_pub to publish messages, eg.:  
+```bash
+   mosquitto_pub -f examples/start_task.yaml -q 2 -t topic1  
+```  
+4. Use mosquitto\_sub to see messages, eg.:  
+```bash
+   mosquitto_sub -q 2 -t topic1  
+```  
+To verify new examples this online yaml parser is useful:  
 http://yaml-online-parser.appspot.com
-
-#######################
-### Logging system: ###
-#######################
-
-You can choose the logging system to use in CMakeLists.txt.
-See comments in there for explanation.
-Systemd is recommended.
