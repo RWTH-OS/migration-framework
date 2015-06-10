@@ -117,9 +117,9 @@ std::string Task::type(bool enable_result_format) const
 {
 	std::array<std::string, 3> types;
 	if (enable_result_format)
-		types = {"vm started", "vm stopped", "vm migrated"};
+		types = {{"vm started", "vm stopped", "vm migrated"}};
 	else
-		types = {"start vm", "stop vm", "migrate vm"};
+		types = {{"start vm", "stop vm", "migrate vm"}};
 	if (sub_tasks.empty())
 		throw std::runtime_error("No subtasks available to get type.");
 	else if (std::dynamic_pointer_cast<Start>(sub_tasks.front()))
@@ -180,23 +180,23 @@ void Task::load(const YAML::Node &node)
 	fast::load(concurrent_execution, node["concurrent-execution"], true);
 }
 
-void Task::execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<fast::Communicator> &comm)
+void Task::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	if (sub_tasks.empty()) return;
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &sub_tasks = this->sub_tasks;
 	auto result_type = type();
-	auto func = [&hypervisor, &comm, sub_tasks, result_type] 
+	auto func = [hypervisor, comm, sub_tasks, result_type]
 	{
 		std::vector<std::future<Result>> future_results;
 		for (auto &sub_task : sub_tasks) // start subtasks
-			future_results.push_back(sub_task->execute(hypervisor));
+			future_results.push_back(sub_task->execute(hypervisor, comm));
 		std::vector<Result> results;
 		for (auto &future_result : future_results) // wait for subtasks to finish
 			results.push_back(future_result.get());
 		comm->send_message(Result_container(result_type, results).to_string());
 	};
-	concurrent_execution ? std::thread([func]{Thread_counter cnt; func();}).detach() : func();
+	concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
 }
 
 Start::Start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, bool concurrent_execution) :
@@ -224,12 +224,13 @@ void Start::load(const YAML::Node &node)
 	fast::load(memory, node["memory"]);
 }
 
-std::future<Result> Start::execute(const std::shared_ptr<Hypervisor> &hypervisor)
+std::future<Result> Start::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
+	(void) comm; // unused parameter
 	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
 	auto &vcpus = this->vcpus;
 	auto &memory = this->memory;
-	auto func = [&hypervisor, vm_name, vcpus, memory] () 
+	auto func = [hypervisor, vm_name, vcpus, memory]
 	{
 		try {
 			hypervisor->start(vm_name, vcpus, memory);
@@ -260,10 +261,11 @@ void Stop::load(const YAML::Node &node)
 	fast::load(vm_name, node["vm-name"]);
 }
 
-std::future<Result> Stop::execute(const std::shared_ptr<Hypervisor> &hypervisor)
+std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
+	(void) comm; // unused parameter
 	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
-	auto func = [&hypervisor, vm_name] ()
+	auto func = [hypervisor, vm_name]
 	{
 		try {
 			hypervisor->stop(vm_name);
@@ -303,17 +305,17 @@ void Migrate::load(const YAML::Node &node)
 	fast::load(pscom_hook_procs, node["parameter"]["pscom-hook-procs"]);
 }
 
-std::future<Result> Migrate::execute(const std::shared_ptr<Hypervisor> &hypervisor)
+std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
 	auto &dest_hostname = this->dest_hostname;
 	auto &live_migration = this->live_migration;
 	auto &pscom_hook_procs = this->pscom_hook_procs;
-	auto func = [&hypervisor, vm_name, dest_hostname, live_migration, pscom_hook_procs] ()
+	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, pscom_hook_procs]
 	{
 		try {
 			// Suspend pscom
-			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs);
+			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs, comm);
 			// Start migration
 			hypervisor->migrate(vm_name, dest_hostname, live_migration);
 			// Resume pscom

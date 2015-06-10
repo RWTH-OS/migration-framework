@@ -104,7 +104,8 @@ public:
 	 */
 	Sub_task(bool concurrent_execution);
 	virtual ~Sub_task(){};
-	virtual std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor) = 0;
+	virtual std::future<Result> execute(std::shared_ptr<Hypervisor> hypervisor,
+					    std::shared_ptr<fast::Communicator> comm) = 0;
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
@@ -146,7 +147,7 @@ public:
 	 * \param hypervisor Hypervisor to be used for execution.
 	 * \param comm Communicator to be used to send results.
 	 */
-	void execute(const std::shared_ptr<Hypervisor> &hypervisor, const std::shared_ptr<fast::Communicator> &comm);
+	void execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm);
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
@@ -195,7 +196,8 @@ public:
 	 * \return Returns Result of Sub_task.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
+	std::future<Result> execute(std::shared_ptr<Hypervisor> hypervisor,
+				    std::shared_ptr<fast::Communicator> comm);
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
@@ -228,7 +230,8 @@ public:
 	 * \return Returns Result of Sub_task.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
+	std::future<Result> execute(std::shared_ptr<Hypervisor> hypervisor,
+				    std::shared_ptr<fast::Communicator> comm);
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
@@ -262,7 +265,8 @@ public:
 	 * \return Returns Result of Sub_task.
 	 * \param hypervisor Hypervisor to be used for execution.
 	 */
-	std::future<Result> execute(const std::shared_ptr<Hypervisor> &hypervisor);
+	std::future<Result> execute(std::shared_ptr<Hypervisor> hypervisor,
+				    std::shared_ptr<fast::Communicator> comm);
 
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;

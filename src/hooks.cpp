@@ -2,17 +2,22 @@
 
 #include <stdexcept>
 
-Suspend_pscom::Suspend_pscom(const std::string &vm_name, unsigned int messages_expected) :
+Suspend_pscom::Suspend_pscom(const std::string &vm_name,
+			     unsigned int messages_expected,
+			     std::shared_ptr<fast::Communicator> comm) :
 	vm_name(vm_name),
 	messages_expected(messages_expected),
-	answers(0)
+	answers(0),
+	qos(0)
 {
-	// init mosquitto
-	loop_start();
-	connect_async("localhost", 1883, 60);
-	subscribe(nullptr, (vm_name + "_migration_resp").c_str(), 0);
-	// request shutdown
-	suspend();
+	if (messages_expected > 0) {
+		if (!(this->comm = std::dynamic_pointer_cast<fast::MQTT_communicator>(comm)))
+			throw std::runtime_error("Suspending pscom procs is not available without MQTT_communicator.");
+		// add subscription to response topic
+		this->comm->add_subscription(vm_name + "_migration_resp", 0);
+		// request shutdown
+		suspend();
+	}
 }
 
 Suspend_pscom::~Suspend_pscom()
@@ -20,19 +25,10 @@ Suspend_pscom::~Suspend_pscom()
 	try {
 		// request resume
 		resume();
-		// clear mosquitto
-		disconnect();
-		loop_stop();
+		comm->remove_subscription(vm_name + "_migration_resp");
 	} catch (...) {
 	}
 }
-
-void Suspend_pscom::on_message(const mosquitto_message *msg)
-{
-	(void)msg; // do nothing to suppress unused variable warning
-	__sync_add_and_fetch(&answers, 1);
-}
-
 
 void Suspend_pscom::suspend()
 {
@@ -40,11 +36,10 @@ void Suspend_pscom::suspend()
 		std::string topic = vm_name + "_migration_req";
 		std::string msg = "*";
 		// publish suspend request
-		int ret = publish(nullptr, topic.c_str(), msg.size(), msg.c_str(), 0, false);
-		if (ret != MOSQ_ERR_SUCCESS)
-			throw std::runtime_error("Error sending suspend message: Code " + std::to_string(ret));
+		comm->send_message(msg, topic, qos);
 		// wait for termination
-		while (answers != messages_expected);
+		for (answers = 0; answers != messages_expected; ++answers)
+			comm->get_message(vm_name + "_migration_resp", std::chrono::seconds(10));
 	}
 }
 
@@ -52,15 +47,13 @@ void Suspend_pscom::resume()
 {
 	// only try to resume if pscom is suspended
 	if (answers == messages_expected && messages_expected > 0) {
-		answers = 0;
 		std::string topic = vm_name + "_migration_req";
 		std::string msg = "*";
 		// publish resume request
-		int ret = publish(nullptr, topic.c_str(), msg.size(), msg.c_str(), 0, false);
-		if (ret != MOSQ_ERR_SUCCESS)
-			throw std::runtime_error("Error sending resume message: Code " + std::to_string(ret));
+		comm->send_message(msg, topic, qos);
 		// wait for termination
-		while (answers != messages_expected);
+		for (answers = 0; answers != messages_expected; ++answers)
+			comm->get_message(vm_name + "_migration_resp", std::chrono::seconds(10));
 		// reset answers counter
 		answers = 0;
 	}
