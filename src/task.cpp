@@ -314,12 +314,10 @@ std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std
 	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, pscom_hook_procs]
 	{
 		try {
-			// Suspend pscom
+			// Suspend pscom (resume in destructor)
 			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs, comm);
 			// Start migration
 			hypervisor->migrate(vm_name, dest_hostname, live_migration);
-			// Resume pscom
-			pscom_hook.resume();
 		} catch (const std::exception &e) {
 			return Result(vm_name, "error", e.what());
 		}

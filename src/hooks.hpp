@@ -13,9 +13,10 @@ public:
 		      unsigned int messages_expected,
 		      std::shared_ptr<fast::Communicator> comm);
 	~Suspend_pscom();
+private:
 	void suspend();
 	void resume();
-private:
+
 	const std::string vm_name;
 	const unsigned int messages_expected;
 	std::shared_ptr<fast::MQTT_communicator> comm;

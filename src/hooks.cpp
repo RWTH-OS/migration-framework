@@ -22,11 +22,20 @@ Suspend_pscom::Suspend_pscom(const std::string &vm_name,
 
 Suspend_pscom::~Suspend_pscom()
 {
-	try {
-		// request resume
-		resume();
-		comm->remove_subscription(vm_name + "_migration_resp");
-	} catch (...) {
+	if (messages_expected > 0) {
+		try {
+			// request resume
+			resume();
+			// remove subscription
+			comm->remove_subscription(vm_name + "_migration_resp");
+		} catch (...) {
+			try { // try to remove subscription but do not throw
+				comm->remove_subscription(vm_name + "_migration_resp");
+			} catch (...) {}
+			// If not during stack unwinding rethrow exception
+			if (!std::uncaught_exception())
+				throw;
+		}
 	}
 }
 
