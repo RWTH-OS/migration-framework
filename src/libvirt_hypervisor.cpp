@@ -46,14 +46,14 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 	if (domain_info->state != VIR_DOMAIN_SHUTOFF)
 		throw std::runtime_error("Wrong domain state: " + std::to_string(domain_info->state));
 	// Set memory
-	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CURRENT | VIR_DOMAIN_MEM_MAXIMUM) == -1)
+	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1)
 		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
-	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
 	// Set VCPUs
-	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CURRENT | VIR_DOMAIN_VCPU_MAXIMUM) == -1)
+	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_VCPU_MAXIMUM) == -1)
 		throw std::runtime_error("Error setting maximum number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
-	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
 	// Create domain
 	if (virDomainCreate(domain.get()) == -1)
