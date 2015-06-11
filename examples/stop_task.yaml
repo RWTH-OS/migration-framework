@@ -1,6 +1,6 @@
 ---
 task: stop vm
 vm-configurations:
-  - vm-name: anthe1
+  - vm-name: vm1
   - vm-name: centos660
 ...

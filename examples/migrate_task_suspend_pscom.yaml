@@ -1,7 +1,7 @@
 ---
-task: migrate start
-vm-name: anthe1
-destination: pandora2
+task: migrate vm
+vm-name: vm1
+destination: localhost
 parameter:
   live-migration: false
   pscom-hook-procs: 1
