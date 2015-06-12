@@ -302,7 +302,7 @@ void Migrate::load(const YAML::Node &node)
 	fast::load(vm_name, node["vm-name"]);
 	fast::load(dest_hostname, node["destination"]);
 	fast::load(live_migration, node["parameter"]["live-migration"]);
-	fast::load(pscom_hook_procs, node["parameter"]["pscom-hook-procs"]);
+	fast::load(pscom_hook_procs, node["parameter"]["pscom-hook-procs"], 0);
 }
 
 std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
