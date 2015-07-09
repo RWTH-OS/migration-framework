@@ -1,3 +1,0 @@
-[submodule "fast-lib"]
-	path = fast-lib
-	url = git@github.com:fast-project/fast-lib.git
