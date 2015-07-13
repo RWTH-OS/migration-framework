@@ -9,9 +9,9 @@
 ---
 communicator:
   type: mqtt
-  id: test-id
-  subscribe-topic: topic1
-  publish-topic: topic1
+  id: fast-migfra-<hostname>
+  subscribe-topic: fast/migfra/<hostname>/task
+  publish-topic: fast/migfra/<hostname>/result
   host: devon
   port: 1883
   keepalive: 60

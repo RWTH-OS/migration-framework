@@ -9,7 +9,7 @@
 # TODO: Write installation of daemon.
 # TODO: Create automatic documentation generation target.
 
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8)
 project(migration-framework)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
@@ -92,16 +92,18 @@ set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 )
 
 # fast-lib
-include_directories(${PROJECT_SOURCE_DIR})
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/fast-lib/CMakeLists.txt")
-	message(SEND_ERROR "fast-lib submodule is empty.\nForgot \"git submodule init && git submodule update\"?")
-else()
-	add_subdirectory(${PROJECT_SOURCE_DIR}/fast-lib)
-	list(APPEND LIBS fastlib_serialization)
-	list(APPEND LIBS_BENCHMARK fastlib_serialization)
-	list(APPEND LIBS fastlib_communication)
-	list(APPEND LIBS_BENCHMARK fastlib_communication)
-endif()
+include(ExternalProject)
+ExternalProject_Add(
+	fastlib
+	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
+	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> 
+)
+ExternalProject_Get_Property(fastlib install_dir)
+include_directories(${install_dir}/include)
+list(APPEND LIBS ${install_dir}/lib/libfastlib_serialization.a)
+list(APPEND LIBS_BENCHMARK ${install_dir}/lib/libfastlib_serialization.a)
+list(APPEND LIBS ${install_dir}/lib/libfastlib_communication.a)
+list(APPEND LIBS_BENCHMARK ${install_dir}/lib/libfastlib_communication.a)
 
 ### Add config files
 # Doxygen documentation generation
