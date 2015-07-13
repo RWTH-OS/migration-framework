@@ -12,7 +12,7 @@ communicator:
   id: test-id
   subscribe-topic: topic1
   publish-topic: topic1
-  host: localhost
+  host: devon
   port: 1883
   keepalive: 60
 hypervisor:

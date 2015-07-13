@@ -1,8 +1,0 @@
----
-task: migrate vm
-vm-name: vm1
-destination: localhost
-parameter:
-  live-migration: false
-  pscom-hook-procs: 1
-...

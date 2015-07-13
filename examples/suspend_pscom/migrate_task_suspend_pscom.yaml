@@ -1,0 +1,8 @@
+---
+task: migrate vm
+vm-name: centos660
+destination: pandora1
+parameter:
+  live-migration: false
+  pscom-hook-procs: 0
+...

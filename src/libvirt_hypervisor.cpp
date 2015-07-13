@@ -15,6 +15,8 @@
 #include <thread>
 #include <memory>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
 
 /// TODO: Get hostname dynamically.
@@ -78,6 +80,36 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 		throw std::runtime_error("Error destroying domain.");
 }
 
+const std::string file_name = "ib_pci_82_00_0.xml";
+
+void attach_device(virDomainPtr domain)
+{
+	// Convert config file to string
+	std::ifstream file_stream(file_name);
+	std::stringstream string_stream;
+	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
+	auto pci_device_xml = string_stream.str();
+
+	// attach device
+	auto ret = virDomainAttachDevice(domain, pci_device_xml.c_str());
+	if (ret != 0)
+		throw std::runtime_error("Failed attaching device with following xml:\n" + pci_device_xml);
+}
+
+void detach_device(virDomainPtr domain)
+{
+	// Convert config file to string
+	std::ifstream file_stream(file_name);
+	std::stringstream string_stream;
+	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
+	auto pci_device_xml = string_stream.str();
+
+	// attach device
+	auto ret = virDomainDetachDevice(domain, pci_device_xml.c_str());
+	if (ret != 0)
+		throw std::runtime_error("Failed detaching device with following xml:\n" + pci_device_xml);
+}
+
 void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration)
 {
 	// Get domain by name
@@ -91,6 +123,8 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info->state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
+	// Detach devices TODO: RAII handler and dynamic device recognition.
+	detach_device(domain.get());
 	// Connect to destination
 	virConnectPtr c1 = virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str());
 	std::unique_ptr<virConnect, decltype(&virConnectClose)> dest_connection(c1, virConnectClose);
@@ -104,4 +138,6 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	std::unique_ptr<virDomain, decltype(&virDomainFree)> dest_domain(d2, virDomainFree);
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
+	// Attach device
+	attach_device(dest_domain.get());
 }
