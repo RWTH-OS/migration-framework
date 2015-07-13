@@ -15,6 +15,10 @@
 #include <fast-lib/communication/mqtt_communicator.hpp>
 #include <mosquittopp.h>
 
+#include <unistd.h>
+#include <cstring>
+#include <climits>
+#include <regex>
 #include <exception>
 #include <stdexcept>
 #include <fstream>
@@ -28,9 +32,25 @@ Task_handler::Task_handler(const std::string &config_file) :
 	std::ifstream file_stream(config_file);
 	std::stringstream string_stream;
 	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
-	auto conf_str = string_stream.str();
+	auto config = string_stream.str();
+	// Get hostname
+	char hostname_cstr[HOST_NAME_MAX];
+	int ret;
+	if ((ret = gethostname(hostname_cstr, HOST_NAME_MAX)) != 0)
+		std::runtime_error(std::string("Failed getting hostname: ") + std::strerror(ret));
+	const std::string hostname(hostname_cstr, std::strlen(hostname_cstr));
+	// Replace placeholder for hostname in config
+// Regex are not implmented in gcc 4.8 so unfortunately the following cannot be used.
+//	std::regex hostname_regex("(<hostname>)");
+//	config = std::regex_replace(config, hostname_regex, hostname);
+	const std::string placeholder("<hostname>");
+	size_t start_pos = 0;
+	while ((start_pos = config.find(placeholder, start_pos)) != std::string::npos) {
+		config.replace(start_pos, placeholder.length(), hostname);
+		start_pos += hostname.length();
+	}
 	// Load config from string
-	from_string(conf_str);
+	from_string(config);
 }
 
 Task_handler::~Task_handler()
