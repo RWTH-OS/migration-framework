@@ -4,7 +4,7 @@
 . "/opt/parastation_gcc_4.4.7/bin/mpivars.sh"
 
 # Add pscom (git version) to library path
-export LD_LIBRARY_PATH="$HOME/pscom/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$HOME/opt/pscom/lib:$LD_LIBRARY_PATH"
 
 # Test if parastaion daemon is running
 if [ ! "$(pidof psid)" ]; then

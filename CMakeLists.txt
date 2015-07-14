@@ -120,6 +120,12 @@ configure_file(
 	@ONLY
 )
 
+# Add device xml files to build
+configure_file(
+	"${PROJECT_SOURCE_DIR}/devices/ib_pci_82_00_1.xml"
+	"${PROJECT_BINARY_DIR}/devices/ib_pci_82_00_1.xml"
+)
+
 ### Build and installation targets
 # Add executable
 add_executable(migfra ${SRC})

@@ -80,7 +80,7 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 		throw std::runtime_error("Error destroying domain.");
 }
 
-const std::string file_name = "ib_pci_82_00_0.xml";
+const std::string file_name = "devices/ib_pci_82_00_1.xml";
 
 void attach_device(virDomainPtr domain)
 {
