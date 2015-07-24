@@ -1,7 +1,7 @@
 ---
 task: migrate vm
-vm-name: centos660
-destination: pandora2
+vm-name: centos711
+destination: pandora3
 parameter:
   live-migration: false
   pscom-hook-procs: 1

@@ -18,6 +18,8 @@ private:
 	void resume();
 
 	const std::string vm_name;
+	std::string request_topic;
+	std::string response_topic;
 	const unsigned int messages_expected;
 	std::shared_ptr<fast::MQTT_communicator> comm;
 	unsigned int answers;
