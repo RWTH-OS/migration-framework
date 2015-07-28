@@ -11,7 +11,7 @@ Suspend_pscom::Suspend_pscom(const std::string &vm_name,
 	qos(0)
 {
 	request_topic = "fast/pscom/" + vm_name + "/any_proc/request";
-	response_topic = "fast/pscom/" + vm_name + "/response";
+	response_topic = "fast/pscom/" + vm_name + "/+/response";
 
 	if (messages_expected > 0) {
 		if (!(this->comm = std::dynamic_pointer_cast<fast::MQTT_communicator>(comm)))
