@@ -46,8 +46,9 @@ public:
 	 * \param vm_name The name of the vm to migrate.
 	 * \param dest_hostname The name of the host to migrate to.
 	 * \param live_migration Enables live migration.
+	 * \param rdma_migration Enables rdma migration.
 	 */
-	virtual void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration) = 0;
+	virtual void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration) = 0;
 };
 
 #endif

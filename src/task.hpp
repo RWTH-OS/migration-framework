@@ -255,9 +255,10 @@ public:
 	 * \param vm_name The name of the virtual machine to migrate.
 	 * \param dest_hostname The name of the host to migrate to.
 	 * \param live_migration Option to enable live migration.
+	 * \param rdma_migration Option to enable rdma migration.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution, unsigned int pscom_hook_procs);
+	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs);
 
 	/**
 	 * \brief Execute the Sub_task.
@@ -275,6 +276,7 @@ private:
 	std::string vm_name;
 	std::string dest_hostname;
 	bool live_migration;
+	bool rdma_migration;
 	unsigned int pscom_hook_procs;
 };
 YAML_CONVERT_IMPL(Migrate)
