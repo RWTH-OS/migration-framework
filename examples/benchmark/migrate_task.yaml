@@ -4,4 +4,5 @@ vm-name: vm-name-placeholder
 destination: destination-placeholder
 parameter:
   live-migration: live-migration-placeholder
+  rdma-migration: rdma-migration-placeholder
 ...

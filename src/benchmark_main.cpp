@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
 		std::string server_b;
 		unsigned int memory;
 		bool live_migration;
+		bool rdma_migration;
 	
 		namespace po = boost::program_options;
 		po::options_description desc("Options");
@@ -61,7 +62,8 @@ int main(int argc, char *argv[])
 			("server-a,A", po::value<std::string>(&server_a)->required(), "name of first server")
 			("server-b,B", po::value<std::string>(&server_b)->required(), "name of second server")
 			("memory,m", po::value<unsigned int>(&memory)->default_value(1024), "memory in MiB to assign to vm")
-			("live,l", po::value<bool>(&live_migration)->default_value(false), "live-migration");
+			("live,l", po::value<bool>(&live_migration)->default_value(false), "live-migration")
+			("rdma,r", po::value<bool>(&rdma_migration)->default_value(false), "rdma-migration");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		if (vm.count("help")) {
@@ -89,6 +91,7 @@ int main(int argc, char *argv[])
 		std::string migrate_to_a_task = read_file(tasks_dir + "/migrate_task.yaml");
 		find_and_replace(migrate_to_a_task, "vm-name-placeholder", vm_name);
 		find_and_replace(migrate_to_a_task, "live-migration-placeholder", live_migration ? "true" : "false");
+		find_and_replace(migrate_to_a_task, "rdma-migration-placeholder", rdma_migration ? "true" : "false");
 		std::string migrate_to_b_task = migrate_to_a_task;
 		find_and_replace(migrate_to_a_task, "destination-placeholder", server_a);
 		find_and_replace(migrate_to_b_task, "destination-placeholder", server_b);

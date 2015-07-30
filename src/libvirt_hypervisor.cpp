@@ -127,7 +127,7 @@ void detach_device(virDomainPtr domain)
 		throw std::runtime_error("Failed detaching device with following xml:\n" + pci_device_xml);
 }
 
-void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration)
+void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration)
 {
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
@@ -152,9 +152,11 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	// Set migration flags
 	unsigned long flags = 0;
 	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;
+	// create migrateuri
+	std::string migrate_uri = rdma_migration? "rdma://" + dest_hostname + "-ib" : NULL;
 	// Migrate domain
 	std::unique_ptr<virDomain, Deleter_virDomain> dest_domain(
-		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, 0, 0)
+		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, migrate_uri.c_str(), 0)
 	);
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());

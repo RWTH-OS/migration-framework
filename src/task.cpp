@@ -277,11 +277,12 @@ std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::s
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool concurrent_execution, unsigned int pscom_hook_procs) :
+Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs) :
 	Sub_task::Sub_task(concurrent_execution),
 	vm_name(vm_name),
 	dest_hostname(dest_hostname),
 	live_migration(live_migration),
+	rdma_migration(rdma_migration),
 	pscom_hook_procs(pscom_hook_procs)
 {
 }
@@ -292,6 +293,7 @@ YAML::Node Migrate::emit() const
 	node["vm-name"] = vm_name;
 	node["destination"] = dest_hostname;
 	node["parameter"]["live-migration"] = live_migration;
+	node["parameter"]["rdma-migration"] = rdma_migration;
 	node["parameter"]["pscom-hook-procs"] = pscom_hook_procs;
 	return node;
 }
@@ -302,6 +304,7 @@ void Migrate::load(const YAML::Node &node)
 	fast::load(vm_name, node["vm-name"]);
 	fast::load(dest_hostname, node["destination"]);
 	fast::load(live_migration, node["parameter"]["live-migration"]);
+	fast::load(rdma_migration, node["parameter"]["rdma-migration"]);
 	fast::load(pscom_hook_procs, node["parameter"]["pscom-hook-procs"], 0);
 }
 
@@ -310,14 +313,15 @@ std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std
 	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
 	auto &dest_hostname = this->dest_hostname;
 	auto &live_migration = this->live_migration;
+	auto &rdma_migration = this->rdma_migration;
 	auto &pscom_hook_procs = this->pscom_hook_procs;
-	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, pscom_hook_procs]
+	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, rdma_migration, pscom_hook_procs]
 	{
 		try {
 			// Suspend pscom (resume in destructor)
 			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs, comm);
 			// Start migration
-			hypervisor->migrate(vm_name, dest_hostname, live_migration);
+			hypervisor->migrate(vm_name, dest_hostname, live_migration, rdma_migration);
 		} catch (const std::exception &e) {
 			return Result(vm_name, "error", e.what());
 		}
