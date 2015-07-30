@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 			("server-a,A", po::value<std::string>(&server_a)->required(), "name of first server")
 			("server-b,B", po::value<std::string>(&server_b)->required(), "name of second server")
 			("memory,m", po::value<unsigned int>(&memory)->default_value(1024), "memory in MiB to assign to vm")
-			("live,l", po::value<bool>(&live_migration)->default_value(false), "live-migration");
+			("live,l", po::value<bool>(&live_migration)->default_value(false), "live-migration")
 			("rdma,r", po::value<bool>(&rdma_migration)->default_value(false), "rdma-migration");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
