@@ -1,6 +1,6 @@
 ---
 task: migrate vm
-vm-name: centos660
+vm-name: centos661
 destination: pandora2
 parameter:
   live-migration: false
