@@ -112,6 +112,8 @@ list(APPEND LIBS ${install_dir}/src/fastlib-build/libmosquitto-prefix/lib/libmos
 list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/libmosquitto-prefix/lib/libmosquitto.a)
 list(APPEND LIBS ${install_dir}/src/fastlib-build/libcares-prefix/lib/libcares.a)
 list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/libcares-prefix/lib/libcares.a)
+list(APPEND LIBS ${install_dir}/src/fastlib-build/boost_src_dir/stage/lib/libboost_regex-mt.a)
+list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/boost_src_dir/stage/lib/libboost_regex-mt.a)
 
 ### Add config files
 # Doxygen documentation generation
