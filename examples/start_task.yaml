@@ -1,10 +1,10 @@
 ---
 task: start vm
 vm-configurations: 
-  - name: vm1
+  - vm-name: vm1
     vcpus: 1
     memory: 1048576
-  - name: centos660
+  - vm-name: centos660
     vcpus: 1
     memory: 524288
 ...
