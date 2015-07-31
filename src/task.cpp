@@ -210,7 +210,7 @@ Start::Start(const std::string &vm_name, unsigned int vcpus, unsigned long memor
 YAML::Node Start::emit() const
 {
 	YAML::Node node = Sub_task::emit();
-	node["name"] = vm_name;
+	node["vm-name"] = vm_name;
 	node["vcpus"] = vcpus;
 	node["memory"] = memory;
 	return node;
@@ -219,7 +219,7 @@ YAML::Node Start::emit() const
 void Start::load(const YAML::Node &node)
 {
 	Sub_task::load(node);
-	fast::load(vm_name, node["name"]);
+	fast::load(vm_name, node["vm-name"]);
 	fast::load(vcpus, node["vcpus"]);
 	fast::load(memory, node["memory"]);
 }
