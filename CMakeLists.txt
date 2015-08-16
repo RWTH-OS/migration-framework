@@ -28,45 +28,12 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pthread")
 
 ### Find libraries
-# Find yaml-cpp
-#find_package(YamlCpp REQUIRED)
-#if(YAMLCPP_FOUND)
-#	include_directories(SYSTEM ${YAMLCPP_INCLUDE_DIR})
-#	list(APPEND LIBS "${YAMLCPP_LIBRARY}")
-#	list(APPEND LIBS_BENCHMARK "${YAMLCPP_LIBRARY}")
-#else()
-#	message(SEND_ERROR "yaml-cpp is required.")
-#endif()
-
-# Find boost
-find_package(Boost COMPONENTS program_options REQUIRED)
-if(Boost_FOUND)
-	include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
-	list(APPEND LIBS "${Boost_LIBRARIES}")
-	list(APPEND LIBS_BENCHMARK "${Boost_LIBRARIES}")
-else()
-	message(SEND_ERROR "Boost::program_options is required.")
-endif()
-
-# Find mosquittopp
-#find_package(Mosquittopp REQUIRED)
-#if(MOSQUITTOPP_FOUND)
-#	include_directories(SYSTEM ${MOSQUITTOPP_INCLUDE_DIR})
-#	list(APPEND LIBS "${MOSQUITTOPP_LIBRARY}")
-#	list(APPEND LIBS_BENCHMARK "${MOSQUITTOPP_LIBRARY}")
-#else()
-#	message(SEND_ERROR "mosquittopp is required.")
-#endif()
-
-# Find mosquitto
-#find_package(Mosquitto REQUIRED)
-#if(MOSQUITTO_FOUND)
-#	include_directories(SYSTEM ${MOSQUITTO_INCLUDE_DIR})
-#	list(APPEND LIBS "${MOSQUITTO_LIBRARY}")
-#	list(APPEND LIBS_BENCHMARK "${MOSQUITTO_LIBRARY}")
-#else()
-#	message(SEND_ERROR "mosquitto is required.")
-#endif()
+set(USE_BOOST_CACHE ON)
+set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
+include(add_boost)
+include_directories(SYSTEM ${BoostSourceDir})
+list(APPEND LIBS "${BoostProgramOptionsLibs}")
+list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}")
 
 # Find libvirt
 find_package(LibVirt REQUIRED)
@@ -96,24 +63,15 @@ include(ExternalProject)
 ExternalProject_Add(
 	fastlib
 	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> 
+	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
 )
 ExternalProject_Get_Property(fastlib install_dir)
-include_directories(${install_dir}/include)
-list(APPEND LIBS ${install_dir}/lib/libfastlib_serialization.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/lib/libfastlib_serialization.a)
-list(APPEND LIBS ${install_dir}/lib/libfastlib_communication.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/lib/libfastlib_communication.a)
-list(APPEND LIBS ${install_dir}/src/fastlib-build/libyaml-prefix/lib/libyaml-cpp.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/libyaml-prefix/lib/libyaml-cpp.a)
-list(APPEND LIBS ${install_dir}/src/fastlib-build/libmosquitto-prefix/lib/libmosquittopp.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/libmosquitto-prefix/lib/libmosquittopp.a)
-list(APPEND LIBS ${install_dir}/src/fastlib-build/libmosquitto-prefix/lib/libmosquitto.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/libmosquitto-prefix/lib/libmosquitto.a)
-list(APPEND LIBS ${install_dir}/src/fastlib-build/libcares-prefix/lib/libcares.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/libcares-prefix/lib/libcares.a)
-list(APPEND LIBS ${install_dir}/src/fastlib-build/boost_src_dir/stage/lib/libboost_regex-mt.a)
-list(APPEND LIBS_BENCHMARK ${install_dir}/src/fastlib-build/boost_src_dir/stage/lib/libboost_regex-mt.a)
+include_directories("${install_dir}/include")
+include_directories(SYSTEM "${install_dir}/include/fast-lib/external")
+set(FASTLIB_SERIALIZATION_LIB "${install_dir}/lib/libfastlib_serialization.a")
+set(FASTLIB_COMMUNICATION_LIB "${install_dir}/lib/libfastlib_communication.a")
+list(APPEND LIBS "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
+list(APPEND LIBS_BENCHMARK "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
 
 ### Add config files
 # Doxygen documentation generation
