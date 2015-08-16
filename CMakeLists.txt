@@ -60,7 +60,6 @@ set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 
 # fast-lib
 include(ExternalProject)
-message(STATUS ${BOOST_CACHE_DIR})
 ExternalProject_Add(
 	fastlib
 	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
