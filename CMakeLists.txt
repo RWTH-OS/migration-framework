@@ -28,15 +28,6 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pthread")
 
 ### Find libraries
-# Find boost
-#find_package(Boost COMPONENTS program_options REQUIRED)
-#if(Boost_FOUND)
-#	include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
-#	list(APPEND LIBS "${Boost_LIBRARIES}")
-#	list(APPEND LIBS_BENCHMARK "${Boost_LIBRARIES}")
-#else()
-#	message(SEND_ERROR "Boost::program_options is required.")
-#endif()
 set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
@@ -72,8 +63,7 @@ include(ExternalProject)
 message(STATUS ${BOOST_CACHE_DIR})
 ExternalProject_Add(
 	fastlib
-#	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	GIT_REPOSITORY git@github.com:timohl/fast-lib.git
+	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
 )
 ExternalProject_Get_Property(fastlib install_dir)
