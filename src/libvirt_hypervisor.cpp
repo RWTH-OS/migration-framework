@@ -39,6 +39,14 @@ struct Deleter_virDomain
 	}
 };
 
+struct Deleter_virNodeDevice
+{
+	void operator()(virNodeDevicePtr ptr) const
+	{
+		virNodeDeviceFree(ptr);
+	}
+};
+
 std::string convert_and_free_cstr(char *cstr)
 {
 	std::string str;
@@ -50,15 +58,16 @@ std::string convert_and_free_cstr(char *cstr)
 
 }
 
-template<typename T, template<typename> class P = std::unique_ptr> std::vector<P<T>> 
-convert_and_free_ptr_array(T **carray, size_t length)
+std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node_devices_wrapper(virConnectPtr conn, unsigned int flags)
 {
-	std::vector<P<T>> vec;
-	if (length != 0)
-		vec.assign(carray, carray + length);
-	if (carray)
-		free(carray);
-	return vec;
+	virNodeDevicePtr *devices_carray = nullptr;
+	auto ret = virConnectListAllNodeDevices(conn, &devices_carray, flags);
+	if (ret < 0) // Libvirt error
+		throw std::runtime_error("Error collecting list of node devices.");
+	std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> devices_vec(devices_carray, devices_carray + ret);
+	if (devices_carray)
+		free(devices_carray);
+	return devices_vec;
 }
 
 class Migrate_devices_guard
@@ -101,15 +110,8 @@ std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr hos
 	std::unique_lock<std::mutex> lock(devices_mutex);
 	// If no entry found try to find and cache devices.
 	if (devices[host_uri][type_id].empty()) {
-		virNodeDevicePtr *devices_carray = nullptr;
-		auto ret = virConnectListAllNodeDevices(host_connection, 
-							&devices_carray, 
-							VIR_CONNECT_LIST_NODE_DEVICES_CAP_PCI_DEV);
-		if (ret == -1) { // Libvirt error
-			throw std::runtime_error("Error collecting list of node devices.");
-		}
-		// Convert c-array to std::vectory<> and pointer to unique_ptr
-		std::vector<std::unique_ptr<virNodeDevice>> found_devices = convert_and_free_ptr_array(devices_carray, ret);
+		// Find devices
+		auto found_devices = list_all_node_devices_wrapper(host_connection, VIR_CONNECT_LIST_NODE_DEVICES_CAP_PCI_DEV);
 		// Fill cache with found devices
 		for (auto &device : found_devices) {
 			auto xml_desc = convert_and_free_cstr(virNodeDeviceGetXMLDesc(device.get(), 0));
