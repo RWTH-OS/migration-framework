@@ -15,13 +15,14 @@
 #include <thread>
 #include <memory>
 #include <iostream>
-#include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
 #include <mutex>
 #include <atomic>
 #include <algorithm>
+
+// Some deleter to be used with smart pointers.
 
 struct Deleter_virConnect
 {
@@ -47,6 +48,8 @@ struct Deleter_virNodeDevice
 	}
 };
 
+// Libvirt sometimes returns a dynamically allocated cstring.
+// As we prefer std::string this function converts and frees.
 std::string convert_and_free_cstr(char *cstr)
 {
 	std::string str;
@@ -58,6 +61,7 @@ std::string convert_and_free_cstr(char *cstr)
 
 }
 
+// Wraps ugly passing of C style array of raw pointers to returning vector of smart pointers.
 std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node_devices_wrapper(virConnectPtr conn, unsigned int flags)
 {
 	virNodeDevicePtr *devices_carray = nullptr;
@@ -70,10 +74,18 @@ std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node
 	return devices_vec;
 }
 
-class Migrate_devices_guard
+// Converts integer type numbers to string in hex format.
+template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr> 
+std::string to_hex_string(const T &integer)
 {
-};
+	std::stringstream ss;
+	ss << std::hex << integer;
+	return ss.str();
+}
 
+// Contains xml description of device which can be used to attach/detach.
+// Also contains a hint to mark the device as already in use.
+// Nevertheless the device might still be tried to attach but has lower priority.
 struct Device
 {
 	Device(const std::string &xml_desc);
@@ -81,6 +93,51 @@ struct Device
 	const std::string xml_desc;
 	std::atomic<bool> attached_hint;
 };
+
+// A lazy initialized cache to store devices in.
+class Device_cache
+{
+public:
+	std::vector<std::shared_ptr<Device>> get_devices(virConnectPtr host_connection, short type_id) const;
+private:
+	// (hosturi : (type_id : xml_desc))
+	mutable std::unordered_map<std::string, std::unordered_map<short, std::vector<std::shared_ptr<Device>>>> devices;
+	mutable std::mutex devices_mutex;
+};
+
+// Provides methods to attach, detach and handle those during migration.
+// TODO: Improve use of PCI device vendor and type id 
+class PCI_device_handler
+{
+public:
+	/**
+	 * \brief Attach device of certain type to domain.
+	 */
+	void attach(virDomainPtr domain, short device_type);
+	/**
+	 * \brief Detach device of certain type to domain.
+	 */
+	void detach(virDomainPtr domain, short device_type);
+private:
+	std::unique_ptr<const Device_cache> device_cache;	
+};
+
+// RAII-guard to detach devices in constructor and reattach in destructor.
+// If no error occures during migration the domain on destination should be set.
+class Migrate_devices_guard
+{
+public:
+	Migrate_devices_guard(const std::unique_ptr<PCI_device_handler> &pci_device_handler);
+	~Migrate_devices_guard();
+	void set_dest_domain(virDomainPtr);
+private:
+	virDomainPtr domain;
+	const std::unique_ptr<PCI_device_handler> &pci_device_handler;
+};
+
+//
+// Device implementation
+//
 
 Device::Device(const std::string &xml_desc) :
 	xml_desc(xml_desc), attached_hint(false)
@@ -92,15 +149,27 @@ Device::Device(std::string &&xml_desc) :
 {
 }
 
-class Device_cache
+//
+// Migrate_devices_guard implementation
+//
+
+Migrate_devices_guard::Migrate_devices_guard(const std::unique_ptr<PCI_device_handler> &pci_device_handler) :
+	pci_device_handler(pci_device_handler)
 {
-public:
-	std::vector<std::shared_ptr<Device>> get_devices(virConnectPtr host_connection, short type_id) const;
-private:
-	// (hosturi : (type_id : xml_desc))
-	mutable std::unordered_map<std::string, std::unordered_map<short, std::vector<std::shared_ptr<Device>>>> devices;
-	mutable std::mutex devices_mutex;
-};
+}
+
+Migrate_devices_guard::~Migrate_devices_guard()
+{
+}
+
+void Migrate_devices_guard::set_dest_domain(virDomainPtr dest_domain)
+{
+	(void) dest_domain;
+}
+
+//
+// Device_cache implementation
+//
 
 std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr host_connection, short type_id) const
 {
@@ -131,33 +200,9 @@ std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr hos
 	return vec;
 }
 
-// TODO: Caching class to query pci xml descs
-class PCI_device_handler
-{
-public:
-	/**
-	 * \brief Attach device of certain type to domain.
-	 */
-	void attach(virDomainPtr domain, short device_type);
-	/**
-	 * \brief Detach device of certain type to domain.
-	 */
-	void Detach(virDomainPtr domain, short device_type);
-	/**
-	 * \brief Returns a RAII-guard for detaching devices before and attaching after migration.
-	 */
-	Migrate_devices_guard migrate_device_wrapper();
-private:
-	std::unique_ptr<const Device_cache> device_cache;	
-};
-
-template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr> 
-std::string to_hex_string(const T &integer)
-{
-	std::stringstream ss;
-	ss << std::hex << integer;
-	return ss.str();
-}
+//
+// PCI_device_handler implementation
+//
 
 void PCI_device_handler::attach(virDomainPtr domain, short device_type)
 {
@@ -181,37 +226,14 @@ void PCI_device_handler::attach(virDomainPtr domain, short device_type)
 		throw std::runtime_error("No pci device could be attached");
 }
 
-const std::string file_name = "devices/ib_pci_82_00_1.xml";
-
-void attach_device(virDomainPtr domain)
+void PCI_device_handler::detach(virDomainPtr domain, short device_type)
 {
-	// Convert config file to string
-	std::ifstream file_stream(file_name);
-	std::stringstream string_stream;
-	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
-	auto pci_device_xml = string_stream.str();
-
-	// attach device
-	auto ret = virDomainAttachDevice(domain, pci_device_xml.c_str());
-	if (ret != 0)
-		throw std::runtime_error("Failed attaching device with following xml:\n" + pci_device_xml);
+	(void) domain; (void) device_type;
 }
 
-void detach_device(virDomainPtr domain)
-{
-	// Convert config file to string
-	std::ifstream file_stream(file_name);
-	std::stringstream string_stream;
-	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
-	auto pci_device_xml = string_stream.str();
-
-	// attach device
-	auto ret = virDomainDetachDevice(domain, pci_device_xml.c_str());
-	if (ret != 0)
-		throw std::runtime_error("Failed detaching device with following xml:\n" + pci_device_xml);
-}
-
-
+//
+// Libvirt_hypervisor implementation
+//
 
 /// TODO: Get hostname dynamically.
 Libvirt_hypervisor::Libvirt_hypervisor() :
@@ -256,7 +278,7 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 	if (virDomainCreate(domain.get()) == -1)
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 	// Attach device
-	attach_device(domain.get());
+	pci_device_handler->attach(domain.get(), 1004);
 }
 
 void Libvirt_hypervisor::stop(const std::string &vm_name)
@@ -292,8 +314,8 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
-	// Detach devices TODO: RAII handler and dynamic device recognition.
-	detach_device(domain.get());
+	// Guard migration of PCI devices.
+	Migrate_devices_guard dev_guard(pci_device_handler);
 	// Connect to destination
 	std::unique_ptr<virConnect, Deleter_virConnect> dest_connection(
 		virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str())
@@ -311,6 +333,6 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	);
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
-	// Attach device
-	attach_device(dest_domain.get());
+	// Register dest_domain to Migrate_devices_guard to ensure device is reattached on destination.
+	dev_guard.set_dest_domain(dest_domain.get());
 }
