@@ -10,6 +10,10 @@
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
+#include <boost/log/trivial.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/xml_parser.hpp>
+#include <boost/regex.hpp>
 
 #include <stdexcept>
 #include <thread>
@@ -76,10 +80,10 @@ std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node
 
 // Converts integer type numbers to string in hex format.
 template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr> 
-std::string to_hex_string(const T &integer)
+std::string to_hex_string(const T &integer, int digits)
 {
 	std::stringstream ss;
-	ss << std::hex << integer;
+	ss << "0x" << std::hex << std::setfill('0') << std::setw(digits) << +integer;
 	return ss.str();
 }
 
@@ -90,6 +94,7 @@ struct Device
 {
 	Device(const std::string &xml_desc);
 	Device(std::string &&xml_desc);
+	std::string to_hostdev_xml() const;
 	const std::string xml_desc;
 	std::atomic<bool> attached_hint;
 };
@@ -110,6 +115,7 @@ private:
 class PCI_device_handler
 {
 public:
+	PCI_device_handler();
 	/**
 	 * \brief Attach device of certain type to domain.
 	 */
@@ -127,12 +133,12 @@ private:
 class Migrate_devices_guard
 {
 public:
-	Migrate_devices_guard(const std::unique_ptr<PCI_device_handler> &pci_device_handler);
+	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler);
 	~Migrate_devices_guard();
 	void set_dest_domain(virDomainPtr);
 private:
 	virDomainPtr domain;
-	const std::unique_ptr<PCI_device_handler> &pci_device_handler;
+	std::shared_ptr<PCI_device_handler> pci_device_handler;
 };
 
 //
@@ -149,11 +155,53 @@ Device::Device(std::string &&xml_desc) :
 {
 }
 
+std::string Device::to_hostdev_xml() const
+{
+	using namespace boost::property_tree;
+	BOOST_LOG_TRIVIAL(trace) << "Fill ptree with device xml description.";
+	ptree device_ptree;
+	{
+		std::stringstream device_xml_sstream(xml_desc);
+		read_xml(device_xml_sstream, device_ptree);
+	}
+	BOOST_LOG_TRIVIAL(trace) << "Get PCI address.";
+	auto caps = device_ptree.get_child("device.capability");
+	auto domain = to_hex_string(caps.get<unsigned short>("domain"), 4);
+	auto bus = to_hex_string(caps.get<unsigned char>("bus"), 2);
+	auto slot = to_hex_string(caps.get<unsigned char>("slot"), 2);
+	auto function = to_hex_string(caps.get<unsigned char>("function"), 1);
+	// Write hostdev xml
+	BOOST_LOG_TRIVIAL(trace) << "Construct hostdev ptree.";
+	ptree hostdev_ptree;
+	hostdev_ptree.put("hostdev.<xmlattr>.mode", "subsystem");
+	hostdev_ptree.put("hostdev.<xmlattr>.type", "pci");
+	hostdev_ptree.put("hostdev.<xmlattr>.managed", "yes");
+	hostdev_ptree.put("hostdev.source.address.<xmlattr>.domain", domain);
+	hostdev_ptree.put("hostdev.source.address.<xmlattr>.bus", bus);
+	hostdev_ptree.put("hostdev.source.address.<xmlattr>.slot", slot);
+	hostdev_ptree.put("hostdev.source.address.<xmlattr>.function", function);
+	// TODO: To what address in vm?
+	hostdev_ptree.put("hostdev.address.<xmlattr>.type", "pci");
+	hostdev_ptree.put("hostdev.address.<xmlattr>.domain", "0x0000");
+	hostdev_ptree.put("hostdev.address.<xmlattr>.bus", "0x00");
+	hostdev_ptree.put("hostdev.address.<xmlattr>.slot", "0x10");
+	hostdev_ptree.put("hostdev.address.<xmlattr>.function", "0x0");
+
+	BOOST_LOG_TRIVIAL(trace) << "Write hostdev ptree to string.";
+	std::stringstream hostdev_xml_sstream;
+	xml_parser::xml_writer_settings<std::string> settings('\t', 1); // Make output pretty (indention)
+	write_xml(hostdev_xml_sstream, hostdev_ptree, settings);
+	// Remove xml tag
+	boost::regex xml_tag_regex(R"((^<\?xml.*version.*encoding.*\?>\n))");
+	return boost::regex_replace(hostdev_xml_sstream.str(), xml_tag_regex, "");
+
+}
+
 //
 // Migrate_devices_guard implementation
 //
 
-Migrate_devices_guard::Migrate_devices_guard(const std::unique_ptr<PCI_device_handler> &pci_device_handler) :
+Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler) :
 	pci_device_handler(pci_device_handler)
 {
 }
@@ -174,24 +222,37 @@ void Migrate_devices_guard::set_dest_domain(virDomainPtr dest_domain)
 std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr host_connection, short type_id) const
 {
 	// Get host URI and convert to std::string.
+	BOOST_LOG_TRIVIAL(trace) << "Get host URI and convert to std::string.";
 	auto host_uri = convert_and_free_cstr(virConnectGetURI(host_connection));
 	// Lock while accessing devices cache.
+	BOOST_LOG_TRIVIAL(trace) << "Lock while accessing device cache.";
 	std::unique_lock<std::mutex> lock(devices_mutex);
 	// If no entry found try to find and cache devices.
+	BOOST_LOG_TRIVIAL(trace) << "If no entry found try to find and cache devices.";
 	if (devices[host_uri][type_id].empty()) {
 		// Find devices
+		BOOST_LOG_TRIVIAL(trace) << "Find devices.";
 		auto found_devices = list_all_node_devices_wrapper(host_connection, VIR_CONNECT_LIST_NODE_DEVICES_CAP_PCI_DEV);
 		// Fill cache with found devices
+		BOOST_LOG_TRIVIAL(trace) << "Fill cache with found devices.";
+		auto type_id_hex = to_hex_string(type_id, 4);
+		BOOST_LOG_TRIVIAL(trace) << "Type id: " << type_id_hex;
 		for (auto &device : found_devices) {
 			auto xml_desc = convert_and_free_cstr(virNodeDeviceGetXMLDesc(device.get(), 0));
-			devices[host_uri][type_id].push_back(std::make_shared<Device>(std::move(xml_desc)));
+			if (xml_desc.find("<product id='" + type_id_hex + "'>") != std::string::npos) {
+				BOOST_LOG_TRIVIAL(trace) << "Found device with xml:" << xml_desc;
+				devices[host_uri][type_id].push_back(std::make_shared<Device>(std::move(xml_desc)));
+			}
 		}
 	}
 	// Copy devices from cache.
+	BOOST_LOG_TRIVIAL(trace) << "Copy devices from cache.";
 	auto vec =  devices[host_uri][type_id];
 	// Unlock since no access to devices cache is needed anymore.
+	BOOST_LOG_TRIVIAL(trace) << "Unlock since no access to device cache is needed anymore.";
 	lock.unlock();
 	// Sort potentially attached devices to end of vector.
+	BOOST_LOG_TRIVIAL(trace) << "Sort potentially attached devices to end of vector.";
 	std::sort(vec.begin(), vec.end(), 
 			[](const std::shared_ptr<Device> &lhs, const std::shared_ptr<Device> &rhs)
 			{
@@ -204,23 +265,41 @@ std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr hos
 // PCI_device_handler implementation
 //
 
+PCI_device_handler::PCI_device_handler() :
+	device_cache(new Device_cache)
+{
+}
+
 void PCI_device_handler::attach(virDomainPtr domain, short device_type)
 {
 	// Get connection the domain belongs to.
+	BOOST_LOG_TRIVIAL(trace) << "Get connection the domain belongs to.";
 	auto connection = virDomainGetConnect(domain);
+	BOOST_LOG_TRIVIAL(trace) << "Done.";
 	// Get vector of devices.
+	BOOST_LOG_TRIVIAL(trace) << "Get vector of devices.";
 	auto devices = device_cache->get_devices(connection, device_type);
 	if (devices.empty()) {
-		throw std::runtime_error("No devices of type \"" + to_hex_string(device_type) 
+		throw std::runtime_error("No devices of type \"" + to_hex_string(device_type, 4) 
 			+ "\" found on \"" + convert_and_free_cstr(virConnectGetURI(connection)) + "\".");
 	}
 	// Try to attach a device until success or none is left.
+	BOOST_LOG_TRIVIAL(trace) << "Try to attach a device until success or none is left.";
 	int ret = -1;
 	for (auto &device : devices) {
-		ret = virDomainAttachDevice(domain, device->xml_desc.c_str());
+		BOOST_LOG_TRIVIAL(trace) << "Trying to attach device.";
+		BOOST_LOG_TRIVIAL(trace) << "Device xml:";
+		BOOST_LOG_TRIVIAL(trace) << device->xml_desc;
+		auto hostdev_xml = device->to_hostdev_xml();
+		BOOST_LOG_TRIVIAL(trace) << "Hostdev xml:";
+		BOOST_LOG_TRIVIAL(trace) << hostdev_xml;
+		ret = virDomainAttachDevice(domain, hostdev_xml.c_str());
 		device->attached_hint = true;
-		if (ret == 0)
+		if (ret == 0) {
+			BOOST_LOG_TRIVIAL(trace) << "Success.";
 			break;
+		}
+		BOOST_LOG_TRIVIAL(trace) << "No success.";
 	}
 	if (ret != 0)
 		throw std::runtime_error("No pci device could be attached");
@@ -237,7 +316,8 @@ void PCI_device_handler::detach(virDomainPtr domain, short device_type)
 
 /// TODO: Get hostname dynamically.
 Libvirt_hypervisor::Libvirt_hypervisor() :
-	local_host_conn(virConnectOpen("qemu:///system"))
+	local_host_conn(virConnectOpen("qemu:///system")),
+	pci_device_handler(std::make_shared<PCI_device_handler>())
 {
 	if (!local_host_conn)
 		throw std::runtime_error("Failed to connect to qemu on local host.");
@@ -253,32 +333,38 @@ Libvirt_hypervisor::~Libvirt_hypervisor()
 void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory)
 {
 	// Get domain by name
+	BOOST_LOG_TRIVIAL(trace) << "Get domain by name.";
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
 		virDomainLookupByName(local_host_conn, vm_name.c_str())
 	);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
 	// Get domain info + check if in shutdown state
+	BOOST_LOG_TRIVIAL(trace) << "Get domain info + check if in shutdown state.";
 	virDomainInfo domain_info;
 	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_SHUTOFF)
 		throw std::runtime_error("Wrong domain state: " + std::to_string(domain_info.state));
 	// Set memory
+	BOOST_LOG_TRIVIAL(trace) << "Set memory.";
 	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1)
 		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
 	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
 	// Set VCPUs
+	BOOST_LOG_TRIVIAL(trace) << "Set VCPUs.";
 	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_VCPU_MAXIMUM) == -1)
 		throw std::runtime_error("Error setting maximum number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
 	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
 	// Create domain
+	BOOST_LOG_TRIVIAL(trace) << "Create domain.";
 	if (virDomainCreate(domain.get()) == -1)
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 	// Attach device
-	pci_device_handler->attach(domain.get(), 1004);
+	BOOST_LOG_TRIVIAL(trace) << "Attach device.";
+	pci_device_handler->attach(domain.get(), 0x1004);
 }
 
 void Libvirt_hypervisor::stop(const std::string &vm_name)

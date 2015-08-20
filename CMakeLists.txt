@@ -32,8 +32,9 @@ set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
 include_directories(SYSTEM ${BoostSourceDir})
-list(APPEND LIBS "${BoostProgramOptionsLibs}")
+list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}")
+message(STATUS "${LIBS}")
 
 # Find libvirt
 find_package(LibVirt REQUIRED)

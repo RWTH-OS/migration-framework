@@ -69,7 +69,7 @@ public:
 	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration);
 private:
 	virConnectPtr local_host_conn;	
-	std::unique_ptr<PCI_device_handler> pci_device_handler;
+	std::shared_ptr<PCI_device_handler> pci_device_handler;
 };
 
 #endif
