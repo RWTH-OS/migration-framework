@@ -286,7 +286,7 @@ std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr hos
 		}
 	}
 	// Copy devices from cache.
-	auto vec =  devices[host_uri][type_id];
+	auto vec = devices[host_uri][type_id];
 	BOOST_LOG_TRIVIAL(trace) << "Found " << vec.size() << " devices on cache.";
 	// Unlock since no access to devices cache is needed anymore.
 	BOOST_LOG_TRIVIAL(trace) << "Unlock since no access to device cache is needed anymore.";
@@ -298,7 +298,16 @@ std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr hos
 			{
 				return lhs->attached_hint < rhs->attached_hint;
 			});
-	// TODO: Shuffle unattached.
+	// Shuffle not attached devices to prevent parallel attachment when starting multiple VMs.
+	BOOST_LOG_TRIVIAL(trace) << "Shuffle not attached devices.";
+	auto sorted_part_end = std::find_if(vec.begin(), vec.end(),
+			[](const std::shared_ptr<Device> &rhs)
+			{
+				return rhs->attached_hint == true;
+			});
+	std::random_device random_seed;
+	std::minstd_rand random_generator(random_seed());
+	std::shuffle(vec.begin(), sorted_part_end, random_generator);
 	return vec;
 }
 
