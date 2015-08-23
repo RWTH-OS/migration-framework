@@ -25,6 +25,7 @@
 #include <mutex>
 #include <atomic>
 #include <algorithm>
+#include <chrono>
 
 // Some deleter to be used with smart pointers.
 
@@ -213,12 +214,14 @@ private:
 class Migrate_devices_guard
 {
 public:
-	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler);
+	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, virDomainPtr domain);
 	~Migrate_devices_guard();
-	void set_dest_domain(virDomainPtr);
+	void reattach_on_destination(virDomainPtr);
+	void reattach();
 private:
-	virDomainPtr domain;
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
+	virDomainPtr domain;
+	std::unordered_map<PCI_id, size_t> detached_types_counts;
 };
 
 //
@@ -350,27 +353,6 @@ std::string Device::to_hostdev_xml() const
 	//boost::regex xml_tag_regex(R"((^<\?xml.*version.*encoding.*\?>\n?))");
 	//return boost::regex_replace(hostdev_xml_sstream.str(), xml_tag_regex, "");
 	return write_xml_to_string(hostdev_ptree);
-}
-
-//
-// Migrate_devices_guard implementation
-//
-
-Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler) :
-	pci_device_handler(pci_device_handler)
-{
-	// detach all devs and store list of detached dev types
-}
-
-Migrate_devices_guard::~Migrate_devices_guard()
-{
-	// reattach stored dev types on destination
-}
-
-void Migrate_devices_guard::set_dest_domain(virDomainPtr dest_domain)
-{
-	(void) dest_domain; 
-	// override domain to reattach devices on
 }
 
 //
@@ -526,6 +508,8 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 			BOOST_LOG_TRIVIAL(trace) << "Error detaching device " << device->address.str() 
 						 << " from " << domain_name << ".";
 		}
+		// TODO: Use detached callback of libvirt instead of sleeping.
+		std::this_thread::sleep_for(std::chrono::seconds(10));
 		device->attached_hint = false;
 	}
 	// Return detached device types with amount (may help reattaching on dest host)
@@ -535,6 +519,45 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 	}
 
 	return types_counts;
+}
+
+//
+// Migrate_devices_guard implementation
+//
+
+Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler,
+		virDomainPtr domain) :
+	pci_device_handler(pci_device_handler),
+	domain(domain)
+{
+	BOOST_LOG_TRIVIAL(trace) << "Detach all devices.";
+	detached_types_counts = pci_device_handler->detach(domain);
+}
+
+Migrate_devices_guard::~Migrate_devices_guard()
+{
+	try {
+		reattach();
+	} catch (...) {
+		BOOST_LOG_TRIVIAL(trace) << "Exception while reattaching devices.";
+	}
+}
+
+void Migrate_devices_guard::reattach_on_destination(virDomainPtr dest_domain)
+{
+	domain = dest_domain;
+	reattach();
+	// override domain to reattach devices on
+}
+
+void Migrate_devices_guard::reattach()
+{
+	for (auto &type_count : detached_types_counts) {
+		for (;type_count.second != 0; --type_count.second) {
+			BOOST_LOG_TRIVIAL(trace) << "Reattach device of type " << type_count.first.str();
+			pci_device_handler->attach(domain, type_count.first);
+		}
+	}
 }
 
 //
@@ -616,21 +639,28 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 
 void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration)
 {
+	BOOST_LOG_TRIVIAL(trace) << "Migrate " << vm_name << " to " << dest_hostname << ".";
+	BOOST_LOG_TRIVIAL(trace) << std::boolalpha << "live-migration=" << live_migration;
+	BOOST_LOG_TRIVIAL(trace) << std::boolalpha << "rdma-migration=" << rdma_migration;
 	// Get domain by name
+	BOOST_LOG_TRIVIAL(trace) << "Get domain by name.";
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
 		virDomainLookupByName(local_host_conn, vm_name.c_str())
 	);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
 	// Get domain info + check if in running state
+	BOOST_LOG_TRIVIAL(trace) << "Get domain info and check if in running state.";
 	virDomainInfo domain_info;
 	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
 	// Guard migration of PCI devices.
-	Migrate_devices_guard dev_guard(pci_device_handler);
+	BOOST_LOG_TRIVIAL(trace) << "Create guard for device migration.";
+	Migrate_devices_guard dev_guard(pci_device_handler, domain.get());
 	// Connect to destination
+	BOOST_LOG_TRIVIAL(trace) << "Connect to destination.";
 	std::unique_ptr<virConnect, Deleter_virConnect> dest_connection(
 		virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str())
 	);
@@ -640,13 +670,15 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	unsigned long flags = 0;
 	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;
 	// create migrateuri
-	std::string migrate_uri = rdma_migration? "rdma://" + dest_hostname + "-ib" : NULL;
+	auto migrate_uri = rdma_migration? ("rdma://" + dest_hostname + "-ib").c_str() : nullptr;
 	// Migrate domain
+	BOOST_LOG_TRIVIAL(trace) << "Migrate domain.";
 	std::unique_ptr<virDomain, Deleter_virDomain> dest_domain(
-		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, migrate_uri.c_str(), 0)
+		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, migrate_uri, 0)
 	);
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
-	// Register dest_domain to Migrate_devices_guard to ensure device is reattached on destination.
-	dev_guard.set_dest_domain(dest_domain.get());
+	// Reattach devices on destination.
+	BOOST_LOG_TRIVIAL(trace) << "Reattach devices on destination.";
+	dev_guard.reattach_on_destination(dest_domain.get());
 }
