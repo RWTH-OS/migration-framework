@@ -80,10 +80,10 @@ std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node
 
 // Converts integer type numbers to string in hex format.
 template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr> 
-std::string to_hex_string(const T &integer, int digits)
+std::string to_hex_string(const T &integer, int digits, bool show_base = true)
 {
 	std::stringstream ss;
-	ss << "0x" << std::hex << std::setfill('0') << std::setw(digits) << +integer;
+	ss << (show_base ? "0x" : "") << std::hex << std::setfill('0') << std::setw(digits) << +integer;
 	return ss.str();
 }
 
@@ -92,23 +92,74 @@ boost::property_tree::ptree read_xml_from_string(const std::string &str)
 {
 	boost::property_tree::ptree pt;
 	std::stringstream ss(str);
-	read_xml(ss, pt);
+	read_xml(ss, pt, boost::property_tree::xml_parser::trim_whitespace);
 	return pt;
+}
+
+std::string write_xml_to_string(const boost::property_tree::ptree &ptree, bool pretty = true)
+{
+	std::stringstream ss;
+	if (pretty) {
+		boost::property_tree::xml_parser::xml_writer_settings<std::string> settings('\t', 1);
+		write_xml(ss, ptree, settings);
+	} else {
+		write_xml(ss, ptree);
+	}
+	return ss.str();
+}
+
+// Contains the vendor id and device id to identify a PCI device type.
+struct PCI_id
+{
+	using vendor_t = unsigned short;
+	using device_t = unsigned short;
+
+	PCI_id(vendor_t vendor, device_t device);
+
+	bool operator==(const PCI_id &rhs) const;
+	std::string vendor_hex() const;
+	std::string device_hex() const;
+	std::string str() const;
+
+	const vendor_t vendor;
+	const device_t  device;
+};
+
+// std::hash specialization to make PCI_id a valid key for unordered_map.
+namespace std
+{
+	template<> struct hash<PCI_id>
+	{
+		typedef PCI_id argument_type;
+		typedef std::size_t result_type;
+		result_type operator()(const argument_type &s) const
+		{
+			const result_type h1(std::hash<PCI_id::vendor_t>()(s.vendor));
+			const result_type h2(std::hash<PCI_id::device_t>()(s.device));
+			return h1 ^ (h2 << 1);
+		}
+	};
 }
 
 // Contains pci address and methods to convert from and to ptree.
 struct PCI_address
 {
-	PCI_address(unsigned short domain, unsigned char bus, unsigned char slot, unsigned char function);
-	PCI_address(const boost::property_tree::ptree &device_ptree);
+	using domain_t = unsigned short;
+	using bus_t = unsigned char;
+	using slot_t = unsigned char;
+	using function_t = unsigned char;
 
-	boost::property_tree::ptree to_ptree() const;
+	PCI_address(domain_t domain, bus_t bus, slot_t slot, function_t function);
+
+	bool operator==(const PCI_address &rhs) const;
+	boost::property_tree::ptree to_address_ptree() const;
 	std::string str() const;
+	std::string to_name_fmt() const;
 
-	const unsigned short domain;
-	const unsigned char bus;
-	const unsigned char slot;
-	const unsigned char function;
+	const domain_t domain;
+	const bus_t bus;
+	const slot_t slot;
+	const function_t function;
 };
 
 // Contains xml description of device which can be used to attach/detach.
@@ -130,10 +181,10 @@ struct Device
 class Device_cache
 {
 public:
-	std::vector<std::shared_ptr<Device>> get_devices(virConnectPtr host_connection, unsigned short type_id) const;
+	std::vector<std::shared_ptr<Device>> get_devices(virConnectPtr host_connection, PCI_id pci_id, bool sort_and_shuffle = true) const;
 private:
-	// (hosturi : (type_id : xml_desc))
-	mutable std::unordered_map<std::string, std::unordered_map<short, std::vector<std::shared_ptr<Device>>>> devices;
+	// (hosturi : (pci_id : xml_desc))
+	mutable std::unordered_map<std::string, std::unordered_map<PCI_id, std::vector<std::shared_ptr<Device>>>> devices;
 	mutable std::mutex devices_mutex;
 };
 
@@ -146,11 +197,13 @@ public:
 	/**
 	 * \brief Attach device of certain type to domain.
 	 */
-	void attach(virDomainPtr domain, short device_type);
+	void attach(virDomainPtr domain, PCI_id pci_id);
 	/**
 	 * \brief Detach device of certain type to domain.
+	 *
+	 * \returns A map with type id as key and the number of detached devices of that type as value.
 	 */
-	void detach(virDomainPtr domain, short device_type);
+	std::unordered_map<PCI_id, size_t> detach(virDomainPtr domain);
 private:
 	std::unique_ptr<const Device_cache> device_cache;	
 };
@@ -169,23 +222,72 @@ private:
 };
 
 //
+// PCI_id implementation
+//
+
+PCI_id make_pci_id_from_nodedev_xml(const std::string &nodedev_xml)
+{
+	auto nodedev_ptree = read_xml_from_string(nodedev_xml);
+	auto vendor = std::stoul(nodedev_ptree.get<std::string>("device.capability.vendor.<xmlattr>.id"), nullptr, 0);
+	auto device = std::stoul(nodedev_ptree.get<std::string>("device.capability.product.<xmlattr>.id"), nullptr, 0);
+	return PCI_id(vendor, device);
+}
+
+PCI_id::PCI_id(vendor_t vendor, device_t device) :
+	vendor(vendor), device(device)
+{
+}
+
+bool PCI_id::operator==(const PCI_id &rhs) const
+{
+	return vendor == rhs.vendor && device == rhs.device;
+}
+
+std::string PCI_id::vendor_hex() const
+{
+	return to_hex_string(vendor, 4);
+}
+
+std::string PCI_id::device_hex() const
+{
+	return to_hex_string(device, 4);
+}
+
+std::string PCI_id::str() const
+{
+	return to_hex_string(vendor, 4, false) + ":" + to_hex_string(device, 4, false);
+}
+
+//
 // PCI_address implementation
 //
 
-PCI_address::PCI_address(unsigned short domain, unsigned char bus, unsigned char slot, unsigned char function) :
+PCI_address make_pci_address_from_device_ptree(const boost::property_tree::ptree &device_ptree)
+{
+	auto domain = device_ptree.get<PCI_address::domain_t>("device.capability.domain");
+	auto bus = device_ptree.get<PCI_address::bus_t>("device.capability.bus");
+	auto slot = device_ptree.get<PCI_address::slot_t>("device.capability.slot");
+	auto function = device_ptree.get<PCI_address::function_t>("device.capability.function");
+	return PCI_address(domain, bus, slot, function);
+}
+
+PCI_address make_pci_address_from_address_ptree(const boost::property_tree::ptree &address_ptree)
+{
+	auto xmlattr = address_ptree.get_child("address.<xmlattr>"); 
+	// std::stoul has to be used since boost.property_tree cannot convert hex strings to integer types.
+	auto domain = std::stoul(xmlattr.get<std::string>("domain"), nullptr, 0);
+	auto bus = std::stoul(xmlattr.get<std::string>("bus"), nullptr, 0);
+	auto slot = std::stoul(xmlattr.get<std::string>("slot"), nullptr, 0);
+	auto function = std::stoul(xmlattr.get<std::string>("function"), nullptr, 0);
+	return PCI_address(domain, bus, slot, function);
+}
+
+PCI_address::PCI_address(domain_t domain, bus_t bus, slot_t slot, function_t function) :
 	domain(domain), bus(bus), slot(slot), function(function)
 {
 }
 
-PCI_address::PCI_address(const boost::property_tree::ptree &device_ptree) :
-	domain(device_ptree.get<unsigned short>("device.capability.domain")),
-	bus(device_ptree.get<unsigned char>("device.capability.bus")),
-	slot(device_ptree.get<unsigned char>("device.capability.slot")),
-	function(device_ptree.get<unsigned char>("device.capability.function"))
-{
-}
-
-boost::property_tree::ptree PCI_address::to_ptree() const
+boost::property_tree::ptree PCI_address::to_address_ptree() const
 {
 	boost::property_tree::ptree pt;
 	pt.put("address.<xmlattr>.domain", to_hex_string(domain, 4));
@@ -197,7 +299,23 @@ boost::property_tree::ptree PCI_address::to_ptree() const
 
 std::string PCI_address::str() const
 {
-	return to_hex_string(domain, 4) + ":" + to_hex_string(bus, 2) + ":" + to_hex_string(slot, 2) + "." + to_hex_string(function, 1);
+	return to_hex_string(domain, 4, false) + ":"
+		+ to_hex_string(bus, 2, false) + ":"
+		+ to_hex_string(slot, 2, false) + "."
+		+ to_hex_string(function, 1, false);
+}
+
+std::string PCI_address::to_name_fmt() const
+{
+	return "pci_" + to_hex_string(domain, 4, false) + "_"
+		+ to_hex_string(bus, 2, false) + "_"
+		+ to_hex_string(slot, 2, false) + "_"
+		+ to_hex_string(function, 1, false);
+}
+
+bool PCI_address::operator==(const PCI_address &rhs) const
+{
+	return domain == rhs.domain && bus == rhs.bus && slot == rhs.slot && function == rhs.function;
 }
 
 //
@@ -206,14 +324,14 @@ std::string PCI_address::str() const
 
 Device::Device(const std::string &xml_desc) :
 	xml_desc(xml_desc),
-	address(read_xml_from_string(xml_desc)),
+	address(make_pci_address_from_device_ptree(read_xml_from_string(xml_desc))),
 	attached_hint(false)
 {
 }
 
 Device::Device(std::string &&xml_desc) :
 	xml_desc(std::move(xml_desc)),
-	address(read_xml_from_string(this->xml_desc)),
+	address(make_pci_address_from_device_ptree(read_xml_from_string(this->xml_desc))),
 	attached_hint(false)
 {
 }
@@ -226,14 +344,12 @@ std::string Device::to_hostdev_xml() const
 	hostdev_ptree.put("hostdev.<xmlattr>.mode", "subsystem");
 	hostdev_ptree.put("hostdev.<xmlattr>.type", "pci");
 	hostdev_ptree.put("hostdev.<xmlattr>.managed", "yes");
-	hostdev_ptree.put_child("hostdev.source", address.to_ptree());
+	hostdev_ptree.put_child("hostdev.source", address.to_address_ptree());
 
-	std::stringstream hostdev_xml_sstream;
-	xml_parser::xml_writer_settings<std::string> settings('\t', 1); // Make output pretty (indention)
-	write_xml(hostdev_xml_sstream, hostdev_ptree, settings);
 	// Remove xml tag
-	boost::regex xml_tag_regex(R"((^<\?xml.*version.*encoding.*\?>\n?))");
-	return boost::regex_replace(hostdev_xml_sstream.str(), xml_tag_regex, "");
+	//boost::regex xml_tag_regex(R"((^<\?xml.*version.*encoding.*\?>\n?))");
+	//return boost::regex_replace(hostdev_xml_sstream.str(), xml_tag_regex, "");
+	return write_xml_to_string(hostdev_ptree);
 }
 
 //
@@ -261,53 +377,59 @@ void Migrate_devices_guard::set_dest_domain(virDomainPtr dest_domain)
 // Device_cache implementation
 //
 
-std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr host_connection, unsigned short type_id) const
+std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr host_connection, PCI_id pci_id, bool sort_and_shuffle) const
 {
 	auto host_uri = convert_and_free_cstr(virConnectGetURI(host_connection));
-	auto type_id_hex = to_hex_string(type_id, 4);
-	BOOST_LOG_TRIVIAL(trace) << "Get devices on host=" << host_uri << " with type_id=" << type_id_hex;
+	BOOST_LOG_TRIVIAL(trace) << "Get devices on host " << host_uri << " with pci_id " << pci_id.str();
 	BOOST_LOG_TRIVIAL(trace) << "Lock while accessing device cache.";
 	std::unique_lock<std::mutex> lock(devices_mutex);
 	// If no entry found try to find and cache devices.
-	if (devices[host_uri][type_id].empty()) {
+	if (devices[host_uri][pci_id].empty()) {
 		BOOST_LOG_TRIVIAL(trace) << "No entry found.";
 		// Find devices
 		BOOST_LOG_TRIVIAL(trace) << "Search for devices.";
 		auto found_devices = list_all_node_devices_wrapper(host_connection, VIR_CONNECT_LIST_NODE_DEVICES_CAP_PCI_DEV);
 		// Fill cache with found devices
 		BOOST_LOG_TRIVIAL(trace) << "Filtering " << found_devices.size() << " found PCI devices.";
-		for (auto &device : found_devices) {
+		for (const auto &device : found_devices) {
 			auto xml_desc = convert_and_free_cstr(virNodeDeviceGetXMLDesc(device.get(), 0));
-			if (xml_desc.find("<product id='" + type_id_hex + "'>") != std::string::npos) {
+			auto found_device_id = xml_desc.find("<product id='" + pci_id.device_hex() + "'>");
+			auto found_vendor_id = xml_desc.find("<vendor id='" + pci_id.vendor_hex() + "'>");
+			if (found_device_id != std::string::npos && found_vendor_id != std::string::npos) {
 				auto dev = std::make_shared<Device>(std::move(xml_desc));
 				BOOST_LOG_TRIVIAL(trace) << "Adding device: " << dev->address.str();
-				devices[host_uri][type_id].push_back(dev);
+				devices[host_uri][pci_id].push_back(dev);
 			}
 		}
 	}
 	// Copy devices from cache.
-	auto vec = devices[host_uri][type_id];
+	auto vec = devices[host_uri][pci_id];
 	BOOST_LOG_TRIVIAL(trace) << "Found " << vec.size() << " devices on cache.";
 	// Unlock since no access to devices cache is needed anymore.
 	BOOST_LOG_TRIVIAL(trace) << "Unlock since no access to device cache is needed anymore.";
 	lock.unlock();
-	// Sort potentially attached devices to end of vector.
-	BOOST_LOG_TRIVIAL(trace) << "Sort potentially attached devices to end of vector.";
-	std::sort(vec.begin(), vec.end(), 
-			[](const std::shared_ptr<Device> &lhs, const std::shared_ptr<Device> &rhs)
-			{
-				return lhs->attached_hint < rhs->attached_hint;
-			});
-	// Shuffle not attached devices to prevent parallel attachment when starting multiple VMs.
-	BOOST_LOG_TRIVIAL(trace) << "Shuffle not attached devices.";
-	auto sorted_part_end = std::find_if(vec.begin(), vec.end(),
-			[](const std::shared_ptr<Device> &rhs)
-			{
-				return rhs->attached_hint == true;
-			});
-	std::random_device random_seed;
-	std::minstd_rand random_generator(random_seed());
-	std::shuffle(vec.begin(), sorted_part_end, random_generator);
+	if (sort_and_shuffle) {
+		// Sort potentially attached devices to end of vector.
+		BOOST_LOG_TRIVIAL(trace) << "Sort potentially attached devices to end of vector.";
+		std::sort(vec.begin(), vec.end(), 
+				[](const std::shared_ptr<Device> &lhs, const std::shared_ptr<Device> &rhs)
+				{
+					return lhs->attached_hint < rhs->attached_hint;
+				});
+		// Shuffle not attached devices to prevent parallel attachment when starting multiple VMs.
+		auto sorted_part_end = std::find_if(vec.begin(), vec.end(),
+				[](const std::shared_ptr<Device> &rhs)
+				{
+					return rhs->attached_hint == true;
+				});
+		BOOST_LOG_TRIVIAL(trace) << std::count_if(vec.begin(), sorted_part_end, 
+						[](const std::shared_ptr<Device>&){return true;})
+					 << " devices are marked as being not attached.";
+		BOOST_LOG_TRIVIAL(trace) << "Shuffle not attached devices.";
+		std::random_device random_seed;
+		std::minstd_rand random_generator(random_seed());
+		std::shuffle(vec.begin(), sorted_part_end, random_generator);
+	}
 	return vec;
 }
 
@@ -320,22 +442,22 @@ PCI_device_handler::PCI_device_handler() :
 {
 }
 
-void PCI_device_handler::attach(virDomainPtr domain, short device_type)
+void PCI_device_handler::attach(virDomainPtr domain, PCI_id pci_id)
 {
 	// Get connection the domain belongs to.
 	BOOST_LOG_TRIVIAL(trace) << "Get connection the domain belongs to.";
 	auto connection = virDomainGetConnect(domain);
 	// Get vector of devices.
 	BOOST_LOG_TRIVIAL(trace) << "Get vector of devices.";
-	auto devices = device_cache->get_devices(connection, device_type);
+	auto devices = device_cache->get_devices(connection, pci_id);
 	if (devices.empty()) {
-		throw std::runtime_error("No devices of type \"" + to_hex_string(device_type, 4) 
+		throw std::runtime_error("No devices of type \"" + pci_id.str() 
 			+ "\" found on \"" + convert_and_free_cstr(virConnectGetURI(connection)) + "\".");
 	}
 	// Try to attach a device until success or none is left.
 	BOOST_LOG_TRIVIAL(trace) << "Try to attach a device until success or none is left.";
 	int ret = -1;
-	for (auto &device : devices) {
+	for (const auto &device : devices) {
 		BOOST_LOG_TRIVIAL(trace) << "Trying to attach device " << device->address.str();
 		auto hostdev_xml = device->to_hostdev_xml();
 		BOOST_LOG_TRIVIAL(trace) << "Hostdev xml:";
@@ -352,12 +474,67 @@ void PCI_device_handler::attach(virDomainPtr domain, short device_type)
 		throw std::runtime_error("No pci device could be attached");
 }
 
-void PCI_device_handler::detach(virDomainPtr domain, short device_type)
+std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domain)
 {
-	(void) domain; (void) device_type;
-	// parse domain xml getting all hostdevs
-	// find those in cache, detach and set hint
-	// return detached devices (may help reattaching on dest host)
+	// Parse domain xml to get all attached hostdevs.
+	BOOST_LOG_TRIVIAL(trace) << "Parse domain xml to get all attached hostdevs.";
+	// TODO: Consider reusing hostdev xml descriptions instead of generating later from cached devices.
+	auto domain_xml = convert_and_free_cstr(virDomainGetXMLDesc(domain, 0));
+	auto domain_ptree = read_xml_from_string(domain_xml);
+	auto attached_devices = domain_ptree.get_child("domain.devices");
+	BOOST_LOG_TRIVIAL(trace) << "Find attached devices.";
+	std::vector<PCI_address> addresses;
+	for (const auto &device : attached_devices) {
+		if (device.first == "hostdev") {
+			addresses.push_back(make_pci_address_from_address_ptree(device.second.get_child("source")));
+		}
+	}
+	BOOST_LOG_TRIVIAL(trace) << "Found " << addresses.size() << " attached devices.";
+	// Get PCI-id of devices.
+	BOOST_LOG_TRIVIAL(trace) << "Get PCI-id of devices.";
+	// TODO: Add method to device cache to find devices 
+	auto connection = virDomainGetConnect(domain);	
+	std::unordered_map<PCI_id, std::vector<PCI_address>> id_addresses_map;
+	for (auto &address : addresses) {
+		std::unique_ptr<virNodeDevice, Deleter_virNodeDevice> nodedev;
+		nodedev.reset(virNodeDeviceLookupByName(connection, address.to_name_fmt().c_str()));
+		auto device_xml = convert_and_free_cstr(virNodeDeviceGetXMLDesc(nodedev.get(), 0));
+		auto pci_id = make_pci_id_from_nodedev_xml(device_xml);
+		id_addresses_map[pci_id].push_back(std::move(address));
+	}
+	// Find devices in cache.
+	BOOST_LOG_TRIVIAL(trace) << "Find devices in cache.";
+	std::vector<std::shared_ptr<Device>> devices;
+	for (const auto &id_addresses_pair : id_addresses_map) {
+		auto pci_id = id_addresses_pair.first;
+		auto addresses = id_addresses_pair.second;
+		auto all_devices = device_cache->get_devices(connection, pci_id, false);
+		for (const auto &address : addresses) {
+			for (const auto &device : all_devices) {
+				if (device->address == address) {
+					devices.push_back(device);
+					break;
+				}
+			}
+		}
+	}
+	// Detach and reset attached hint.
+	BOOST_LOG_TRIVIAL(trace) << "Detach and reset attached hint.";
+	for (const auto &device : devices) {
+		if (virDomainDetachDevice(domain, device->to_hostdev_xml().c_str()) != 0) {
+			auto domain_name = virDomainGetName(domain);
+			BOOST_LOG_TRIVIAL(trace) << "Error detaching device " << device->address.str() 
+						 << " from " << domain_name << ".";
+		}
+		device->attached_hint = false;
+	}
+	// Return detached device types with amount (may help reattaching on dest host)
+	std::unordered_map<PCI_id, size_t> types_counts;
+	for (const auto &id_addresses_pair : id_addresses_map) {
+		types_counts[id_addresses_pair.first] = id_addresses_pair.second.size();
+	}
+
+	return types_counts;
 }
 
 //
@@ -414,7 +591,7 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 	// Attach device
 	BOOST_LOG_TRIVIAL(trace) << "Attach device.";
-	pci_device_handler->attach(domain.get(), 0x1004);
+	pci_device_handler->attach(domain.get(), PCI_id(0x15b3, 0x1004));
 }
 
 void Libvirt_hypervisor::stop(const std::string &vm_name)
@@ -431,6 +608,7 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
+	pci_device_handler->detach(domain.get());
 	// Destroy domain
 	if (virDomainDestroy(domain.get()) == -1)
 		throw std::runtime_error("Error destroying domain.");

@@ -10,6 +10,8 @@
 
 #include "hooks.hpp"
 
+#include <boost/log/trivial.hpp>
+
 #include <exception>
 #include <future>
 #include <utility>
@@ -235,6 +237,7 @@ std::future<Result> Start::execute(std::shared_ptr<Hypervisor> hypervisor, std::
 		try {
 			hypervisor->start(vm_name, vcpus, memory);
 		} catch (const std::exception &e) {
+			BOOST_LOG_TRIVIAL(warning) << "Exception in start task: " << e.what();
 			return Result(vm_name, "error", e.what());
 		}
 		return Result(vm_name, "success");
@@ -270,6 +273,7 @@ std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::s
 		try {
 			hypervisor->stop(vm_name);
 		} catch (const std::exception &e) {
+			BOOST_LOG_TRIVIAL(warning) << "Exception in stop task: " << e.what();
 			return Result(vm_name, "error", e.what());
 		}
 		return Result(vm_name, "success");
@@ -323,6 +327,7 @@ std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std
 			// Start migration
 			hypervisor->migrate(vm_name, dest_hostname, live_migration, rdma_migration);
 		} catch (const std::exception &e) {
+			BOOST_LOG_TRIVIAL(warning) << "Exception in migrate task: " << e.what();
 			return Result(vm_name, "error", e.what());
 		}
 		return Result(vm_name, "success");
