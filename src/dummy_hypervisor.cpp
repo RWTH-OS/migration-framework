@@ -15,9 +15,9 @@ Dummy_hypervisor::Dummy_hypervisor(bool never_throw) noexcept :
 {
 }
 
-void Dummy_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory)
+void Dummy_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids)
 {
-	(void) vm_name; (void) vcpus; (void) memory;
+	(void) vm_name; (void) vcpus; (void) memory; (void) pci_ids;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }

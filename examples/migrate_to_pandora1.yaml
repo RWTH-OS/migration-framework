@@ -1,8 +1,8 @@
 ---
 task: migrate vm
 vm-name: centos7113
-destination: pandora2
+destination: pandora1
 parameter:
-  live-migration: false
+  live-migration: true
   rdma-migration: false
 ...

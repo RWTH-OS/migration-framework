@@ -13,6 +13,11 @@
 
 #include <libvirt/libvirt.h>
 
+#include <memory>
+#include <vector>
+
+class PCI_device_handler;
+
 /**
  * \brief Implementation of the Hypervisor interface using libvirt API.
  *
@@ -44,7 +49,7 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory);
+	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids);
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
@@ -65,6 +70,7 @@ public:
 	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration);
 private:
 	virConnectPtr local_host_conn;	
+	std::shared_ptr<PCI_device_handler> pci_device_handler;
 };
 
 #endif

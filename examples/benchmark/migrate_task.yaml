@@ -1,5 +1,5 @@
 ---
-task: migrate start
+task: migrate vm
 vm-name: vm-name-placeholder
 destination: destination-placeholder
 parameter:

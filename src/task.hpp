@@ -10,6 +10,7 @@
 #define TASK_HPP
 
 #include "hypervisor.hpp"
+#include "pci_device_handler.hpp"
 
 #include <fast-lib/communication/communicator.hpp>
 #include <fast-lib/serialization/serializable.hpp>
@@ -62,7 +63,7 @@ private:
 struct Result : public fast::Serializable
 {
 	Result() = default;
-	Result(const std::string &vm_name, const std::string &status, const std::string &details = "");
+	Result(std::string vm_name, std::string status, std::string details = "");
 	std::string vm_name;
 	std::string status;
 	std::string details;
@@ -81,7 +82,7 @@ struct Result_container : public fast::Serializable
 {
 	Result_container() = default;
 	Result_container(const std::string &yaml_str);
-	Result_container(const std::string &title, const std::vector<Result> &results);
+	Result_container(std::string title, std::vector<Result> results);
 	YAML::Node emit() const override;
 	void load(const YAML::Node &node) override;
 
@@ -188,7 +189,7 @@ public:
 	 * \param memory The ram to assign to the virtual machine in MiB.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, bool concurrent_execution);
+	Start(std::string vm_name, unsigned int vcpus, unsigned long memory, std::vector<PCI_id> pci_ids, bool concurrent_execution);
 
 	/**
 	 * \brief Execute the Sub_task.
@@ -205,6 +206,7 @@ private:
 	std::string vm_name;
 	unsigned int vcpus;
 	unsigned long memory;
+	std::vector<PCI_id> pci_ids;
 };
 YAML_CONVERT_IMPL(Start)
 
@@ -222,7 +224,7 @@ public:
 	 * \param vm_name The name of the virtual machine to stop.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Stop(const std::string &vm_name, bool concurrent_execution);
+	Stop(std::string vm_name, bool concurrent_execution);
 	
 	/**
 	 * \brief Execute the Sub_task.
@@ -258,7 +260,7 @@ public:
 	 * \param rdma_migration Option to enable rdma migration.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs);
+	Migrate(std::string vm_name, std::string dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs);
 
 	/**
 	 * \brief Execute the Sub_task.

@@ -32,18 +32,21 @@ set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
 include_directories(SYSTEM ${BoostSourceDir})
-list(APPEND LIBS "${BoostProgramOptionsLibs}")
-list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}")
+list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
+list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 
 # Find libvirt
 find_package(LibVirt REQUIRED)
 if(LIBVIRT_FOUND)
 	include_directories(SYSTEM ${LibVirt_INCLUDE_DIR})
 	list(APPEND LIBS "${LibVirt_LIBRARY}")
+	list(APPEND LIBS_BENCHMARK "${LibVirt_LIBRARY}")
 else()
 
 	message(SEND_ERROR "libvirt is required.")
 endif()
+#include_directories(SYSTEM /global/cluster/libvirt-1.2.16/include)
+#list(APPEND LIBS "/global/cluster/libvirt-1.2.16/lib/libvirt.so")
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
@@ -52,10 +55,12 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
+	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
+	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 )
 
 # fast-lib
