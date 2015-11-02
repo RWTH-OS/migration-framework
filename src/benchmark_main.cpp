@@ -76,9 +76,17 @@ int main(int argc, char *argv[])
 			return EXIT_SUCCESS;
 		}
 	
+		// topics
+		auto server_a_task = "fast/migfra/" + server_a + "/task";
+		auto server_a_result = "fast/migfra/" + server_a + "/result";
+		auto server_b_task = "fast/migfra/" + server_b + "/task";
+		auto server_b_result = "fast/migfra/" + server_b + "/result";
+	
 		// start communicator
 		std::cout << "Starting communicator." << std::endl;
-		fast::MQTT_communicator comm("migfra-benchmark", "topic-results", "", host_name, 1883, 60);
+		fast::MQTT_communicator comm("migfra-benchmark", "", host_name, 1883, 60);
+		comm.add_subscription(server_a_result);
+		comm.add_subscription(server_b_result);
 	
 		// read task strings from files and replace placeholder by arguments
 		std::cout << "Reading task strings vom files." << std::endl;
@@ -95,21 +103,25 @@ int main(int argc, char *argv[])
 		std::string migrate_to_b_task = migrate_to_a_task;
 		find_and_replace(migrate_to_a_task, "destination-placeholder", server_a);
 		find_and_replace(migrate_to_b_task, "destination-placeholder", server_b);
-	
+
 		// start vm
 		std::cout << "Starting VM using " << memory << " MiB RAM." << std::endl;
-		bool success = true;
+		bool success = false;
 		do {
 			try {
-				comm.send_message(start_task, "topic-a");
-				Result_container result_container(comm.get_message(std::chrono::seconds(1)));
-				if (result_container.title == "vm started" && result_container.results[0].status != "success")
-					throw std::runtime_error("Error while starting vm.");
+				comm.send_message(start_task, server_a_task);
+				Result_container result_container(comm.get_message(server_a_result, std::chrono::seconds(5)));
+				if (result_container.title == "vm started") {
+					if (result_container.results[0].status == "success")
+						success = true;
+					else
+						throw std::runtime_error("Error while starting vm.");
+				}
 			} catch (const std::runtime_error &e) {
-				if (e.what() == std::string("Timeout while waiting for message.")) {
+				if (e.what() == std::string("Timeout while waiting for message."))
 					std::cout << "Retry starting VM." << std::endl;
-					success = false;
-				} else throw e;
+				else 
+					throw e;
 			}
 		} while (!success);
 
@@ -123,14 +135,14 @@ int main(int argc, char *argv[])
 		for (decltype(n) i = 0; i != n; ++i) {
 			auto start = std::chrono::high_resolution_clock::now();
 			// migrate to b
-			comm.send_message(migrate_to_b_task, "topic-a");
-			Result_container result_container(comm.get_message());
+			comm.send_message(migrate_to_b_task, server_a_task);
+			Result_container result_container(comm.get_message(server_a_result));
 			if (result_container.title == "migrate done" && result_container.results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
 			// migrate to a	
-			comm.send_message(migrate_to_a_task, "topic-b");
-			result_container.from_string(comm.get_message());
+			comm.send_message(migrate_to_a_task, server_b_task);
+			result_container.from_string(comm.get_message(server_b_result));
 			if (result_container.title == "migrate done" && result_container.results[0].status != "success")
 				throw std::runtime_error("Migration failed.");
 
@@ -141,8 +153,8 @@ int main(int argc, char *argv[])
 	
 		// stop vm
 		std::cout << "Stopping VMs." << std::endl;
-		comm.send_message(stop_task, "topic-a");
-		if (Result_container(comm.get_message()).results[0].status != "success")
+		comm.send_message(stop_task, server_a_task);
+		if (Result_container(comm.get_message(server_a_result)).results[0].status != "success")
 			throw std::runtime_error("Migration failed.");
 
 		// print results

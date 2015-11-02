@@ -77,26 +77,24 @@ elif [ -n "$server_a" ] && [ -n "$server_b" ]; then
 	ssh -f "$server_b" "`realpath $0` -B $server_b"
 
 	# start migration benchmark
-	`dirname $0`/../../build/migfra_benchmark -n $n -V "$vm_name" -t "." -H "`hostname`" -A "$server_a" -B "$server_b" -m "$memory"
+	`dirname $0`/../../build/migfra_benchmark -n $n -V "$vm_name" -t "." -H devon -A "$server_a" -B "$server_b" -m "$memory"
 
 	# quit migfra on servers
 	echo "Stop migfra on servers"
-	mosquitto_pub -t "topic-a" -q 2 -f "`dirname $0`/quit_task.yaml"
-	mosquitto_pub -t "topic-b" -q 2 -f "`dirname $0`/quit_task.yaml"
+	mosquitto_pub -t "fast/migfra/$server_a/task" -h devon -q 2 -f "`dirname $0`/quit_task.yaml"
+	mosquitto_pub -t "fast/migfra/$server_b/task" -h devon -q 2 -f "`dirname $0`/quit_task.yaml"
 
 elif [ -n "$server_a" ] || [ -n "$server_b" ]; then
 	if [ -n "$server_a" ]; then
 		server="$server_a"
-		config="server_a.conf"
 	else
 		server="$server_b"
-		config="server_b.conf"
 	fi
 	echo "Starting migfra on $server"
-	echo "Using conf: $config"
 	cd `dirname $0`
-	if [ -f "../../build/migfra" ]; then
-		../../build/migfra --config "$config" & disown
+	cd ../../build
+	if [ -f "./migfra" ]; then
+		./migfra & disown
 	else
 		echo "Cannot find migfra executable on $server."
 		exit 1

@@ -17,6 +17,7 @@
 
 #include <stdexcept>
 #include <thread>
+#include <future>
 #include <memory>
 #include <iostream>
 #include <sstream>
@@ -508,8 +509,6 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 			BOOST_LOG_TRIVIAL(trace) << "Error detaching device " << device->address.str() 
 						 << " from " << domain_name << ".";
 		}
-		// TODO: Use detached callback of libvirt instead of sleeping.
-		std::this_thread::sleep_for(std::chrono::seconds(10));
 		device->attached_hint = false;
 	}
 	// Return detached device types with amount (may help reattaching on dest host)
@@ -545,9 +544,9 @@ Migrate_devices_guard::~Migrate_devices_guard()
 
 void Migrate_devices_guard::reattach_on_destination(virDomainPtr dest_domain)
 {
+	// override domain to reattach devices on
 	domain = dest_domain;
 	reattach();
-	// override domain to reattach devices on
 }
 
 void Migrate_devices_guard::reattach()

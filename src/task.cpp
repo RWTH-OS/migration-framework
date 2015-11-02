@@ -170,15 +170,15 @@ void Task::load(const YAML::Node &node)
 	}
 	if (type == "start vm") {
 		sub_tasks = load_sub_tasks<Start>(node);
-	}
-	else if (type == "stop vm") {
+	} else if (type == "stop vm") {
 		sub_tasks = load_sub_tasks<Stop>(node);
-	}
-	else if (type == "migrate vm") {
+	} else if (type == "migrate vm") {
 		sub_tasks = load_sub_tasks<Migrate>(node);
-	}
-	else
+	} else if (type == "quit") {
+		throw std::runtime_error("quit");
+	} else {
 		throw std::runtime_error("Unknown type of Task while loading.");
+	}
 	fast::load(concurrent_execution, node["concurrent-execution"], true);
 }
 
@@ -187,7 +187,7 @@ void Task::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast:
 	if (sub_tasks.empty()) return;
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &sub_tasks = this->sub_tasks;
-	auto result_type = type();
+	auto result_type = type(true);
 	auto func = [hypervisor, comm, sub_tasks, result_type]
 	{
 		std::vector<std::future<Result>> future_results;

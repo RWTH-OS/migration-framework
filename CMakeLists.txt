@@ -44,6 +44,8 @@ else()
 
 	message(SEND_ERROR "libvirt is required.")
 endif()
+#include_directories(SYSTEM /global/cluster/libvirt-1.2.16/include)
+#list(APPEND LIBS "/global/cluster/libvirt-1.2.16/lib/libvirt.so")
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp

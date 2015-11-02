@@ -1,7 +1,7 @@
 ---
 task: start vm
 vm-configurations: 
-  - name: vm-name-placeholder
+  - vm-name: vm-name-placeholder
     vcpus: vcpu-placeholder
     memory: memory-placeholder
 ...
