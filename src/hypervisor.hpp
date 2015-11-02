@@ -9,7 +9,10 @@
 #ifndef HYPERVISOR_HPP
 #define HYPERVISOR_HPP
 
+#include "pci_device_handler.hpp"
+
 #include <string>
+#include <vector>
 
 /**
  * \brief An abstract class to provide an interface for the hypervisor.
@@ -31,7 +34,7 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	virtual void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory) = 0;
+	virtual void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids) = 0;
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *

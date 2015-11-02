@@ -14,6 +14,7 @@
 #include <libvirt/libvirt.h>
 
 #include <memory>
+#include <vector>
 
 class PCI_device_handler;
 
@@ -48,7 +49,7 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory);
+	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids);
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *

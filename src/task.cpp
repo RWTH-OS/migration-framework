@@ -49,9 +49,9 @@ Result_container::Result_container(const std::string &yaml_str)
 	from_string(yaml_str);
 }
 
-Result_container::Result_container(const std::string &title, const std::vector<Result> &results) :
-	title(title),
-	results(results)
+Result_container::Result_container(std::string title, std::vector<Result> results) :
+	title(std::move(title)),
+	results(std::move(results))
 {
 }
 
@@ -69,10 +69,10 @@ void Result_container::load(const YAML::Node &node)
 	fast::load(results, node["list"]);
 }
 
-Result::Result(const std::string &vm_name, const std::string &status, const std::string &details) :
-	vm_name(vm_name),
-	status(status),
-	details(details)
+Result::Result(std::string vm_name, std::string status, std::string details) :
+	vm_name(std::move(vm_name)),
+	status(std::move(status)),
+	details(std::move(details))
 {
 }
 
@@ -201,11 +201,12 @@ void Task::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast:
 	concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
 }
 
-Start::Start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, bool concurrent_execution) :
+Start::Start(std::string vm_name, unsigned int vcpus, unsigned long memory, std::vector<PCI_id> pci_ids, bool concurrent_execution) :
 	Sub_task::Sub_task(concurrent_execution),
-	vm_name(vm_name),
+	vm_name(std::move(vm_name)),
 	vcpus(vcpus),
-	memory(memory)
+	memory(memory),
+	pci_ids(std::move(pci_ids))
 {
 }
 
@@ -215,6 +216,7 @@ YAML::Node Start::emit() const
 	node["vm-name"] = vm_name;
 	node["vcpus"] = vcpus;
 	node["memory"] = memory;
+	node["pci-ids"] = pci_ids;
 	return node;
 }
 
@@ -224,18 +226,22 @@ void Start::load(const YAML::Node &node)
 	fast::load(vm_name, node["vm-name"]);
 	fast::load(vcpus, node["vcpus"]);
 	fast::load(memory, node["memory"]);
+	fast::load(pci_ids, node["pci-ids"], std::vector<PCI_id>());
 }
 
 std::future<Result> Start::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	(void) comm; // unused parameter
-	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
+	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
+	// This is for C++11 compability as in C++14 init captures should be used.
+	auto &vm_name = this->vm_name;
 	auto &vcpus = this->vcpus;
 	auto &memory = this->memory;
-	auto func = [hypervisor, vm_name, vcpus, memory]
+	auto &pci_ids = this->pci_ids;
+	auto func = [hypervisor, vm_name, vcpus, memory, pci_ids]
 	{
 		try {
-			hypervisor->start(vm_name, vcpus, memory);
+			hypervisor->start(vm_name, vcpus, memory, pci_ids);
 		} catch (const std::exception &e) {
 			BOOST_LOG_TRIVIAL(warning) << "Exception in start task: " << e.what();
 			return Result(vm_name, "error", e.what());
@@ -245,9 +251,9 @@ std::future<Result> Start::execute(std::shared_ptr<Hypervisor> hypervisor, std::
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Stop::Stop(const std::string &vm_name, bool concurrent_execution) :
+Stop::Stop(std::string vm_name, bool concurrent_execution) :
 	Sub_task::Sub_task(concurrent_execution),
-	vm_name(vm_name)
+	vm_name(std::move(vm_name))
 {
 }
 
@@ -267,7 +273,9 @@ void Stop::load(const YAML::Node &node)
 std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	(void) comm; // unused parameter
-	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
+	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
+	// This is for C++11 compability as in C++14 init captures should be used.
+	auto &vm_name = this->vm_name;
 	auto func = [hypervisor, vm_name]
 	{
 		try {
@@ -281,10 +289,10 @@ std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::s
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Migrate::Migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs) :
+Migrate::Migrate(std::string vm_name, std::string dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs) :
 	Sub_task::Sub_task(concurrent_execution),
-	vm_name(vm_name),
-	dest_hostname(dest_hostname),
+	vm_name(std::move(vm_name)),
+	dest_hostname(std::move(dest_hostname)),
 	live_migration(live_migration),
 	rdma_migration(rdma_migration),
 	pscom_hook_procs(pscom_hook_procs)
@@ -314,7 +322,9 @@ void Migrate::load(const YAML::Node &node)
 
 std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
-	auto &vm_name = this->vm_name; /// \todo In C++14 init capture should be used!
+	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
+	// This is for C++11 compability as in C++14 init captures should be used.
+	auto &vm_name = this->vm_name;
 	auto &dest_hostname = this->dest_hostname;
 	auto &live_migration = this->live_migration;
 	auto &rdma_migration = this->rdma_migration;
