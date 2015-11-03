@@ -415,11 +415,10 @@ Migrate_devices_guard::~Migrate_devices_guard()
 	}
 }
 
-void Migrate_devices_guard::reattach_on_destination(virDomainPtr dest_domain)
+void Migrate_devices_guard::set_destination_domain(virDomainPtr dest_domain)
 {
 	// override domain to reattach devices on
 	domain = dest_domain;
-	reattach();
 }
 
 void Migrate_devices_guard::reattach()

@@ -158,7 +158,10 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	);
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
+	// Set destination domain for guards
+	BOOST_LOG_TRIVIAL(trace) << "Set destination domain for guards.";
+	dev_guard.set_destination_domain(dest_domain.get());
 	// Reattach devices on destination.
 	BOOST_LOG_TRIVIAL(trace) << "Reattach devices on destination.";
-	dev_guard.reattach_on_destination(dest_domain.get());
+	dev_guard.reattach();
 }

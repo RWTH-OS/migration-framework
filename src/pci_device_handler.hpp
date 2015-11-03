@@ -136,7 +136,8 @@ class Migrate_devices_guard
 public:
 	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, virDomainPtr domain);
 	~Migrate_devices_guard();
-	void reattach_on_destination(virDomainPtr);
+
+	void set_destination_domain(virDomainPtr dest_domain);
 	void reattach();
 private:
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
