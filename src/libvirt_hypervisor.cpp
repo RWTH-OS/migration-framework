@@ -16,7 +16,6 @@
 
 #include <stdexcept>
 #include <memory>
-#include <iostream>
 
 // Some deleter to be used with smart pointers.
 
@@ -52,7 +51,7 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
 	if (virConnectClose(local_host_conn)) {
-		std::cout << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!" << std::endl;
+		BOOST_LOG_TRIVIAL(trace) << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!";
 	}
 }
 
