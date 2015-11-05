@@ -13,9 +13,12 @@
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
 #include <boost/log/trivial.hpp>
+#include <libssh/libsshpp.hpp>
 
 #include <stdexcept>
 #include <memory>
+#include <thread>
+#include <chrono>
 
 // Some deleter to be used with smart pointers.
 
@@ -34,6 +37,26 @@ struct Deleter_virDomain
 		virDomainFree(ptr);
 	}
 };
+
+void probe_ssh_connection(virDomainPtr domain)
+{
+	auto host = virDomainGetName(domain);
+	ssh::Session session;
+	session.setOption(SSH_OPTIONS_HOST, host);
+	bool success = false;
+	do {
+		try {
+			BOOST_LOG_TRIVIAL(trace) << "Try to connect to domain with SSH.";
+			session.connect();
+			BOOST_LOG_TRIVIAL(trace) << "Domain is ready.";
+			success = true;
+		} catch (ssh::SshException &e) {
+			BOOST_LOG_TRIVIAL(debug) << "Exception while connecting with SSH: " << e.getError();
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+		session.disconnect();
+	} while (!success);
+}
 
 //
 // Libvirt_hypervisor implementation
@@ -93,6 +116,8 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 		BOOST_LOG_TRIVIAL(trace) << "Attach device with PCI-ID " << pci_id.str();
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
+	// Wait for domain to boot
+	probe_ssh_connection(domain.get());
 }
 
 void Libvirt_hypervisor::stop(const std::string &vm_name)

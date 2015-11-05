@@ -35,6 +35,34 @@ include_directories(SYSTEM ${BoostSourceDir})
 list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 
+# fast-lib
+include(ExternalProject)
+ExternalProject_Add(
+	fastlib
+	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
+	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
+)
+ExternalProject_Get_Property(fastlib install_dir)
+include_directories("${install_dir}/include")
+include_directories(SYSTEM "${install_dir}/include/fast-lib/external")
+set(FASTLIB_SERIALIZATION_LIB "${install_dir}/lib/libfastlib_serialization.a")
+set(FASTLIB_COMMUNICATION_LIB "${install_dir}/lib/libfastlib_communication.a")
+list(APPEND LIBS "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
+list(APPEND LIBS_BENCHMARK "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
+
+# libssh
+ExternalProject_Add(
+	libssh
+	GIT_REPOSITORY http://git.libssh.org/projects/libssh.git
+	GIT_TAG libssh-0.7.2
+	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+)
+ExternalProject_Get_Property(libssh install_dir)
+include_directories(SYSTEM "${install_dir}/include")
+list(APPEND LIBS "${install_dir}/lib/libssh.so")
+#add_definitions(-DLIBSSH_STATIC=1)
+
+
 # Find libvirt
 find_package(LibVirt REQUIRED)
 if(LIBVIRT_FOUND)
@@ -62,21 +90,6 @@ set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 )
-
-# fast-lib
-include(ExternalProject)
-ExternalProject_Add(
-	fastlib
-	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
-)
-ExternalProject_Get_Property(fastlib install_dir)
-include_directories("${install_dir}/include")
-include_directories(SYSTEM "${install_dir}/include/fast-lib/external")
-set(FASTLIB_SERIALIZATION_LIB "${install_dir}/lib/libfastlib_serialization.a")
-set(FASTLIB_COMMUNICATION_LIB "${install_dir}/lib/libfastlib_communication.a")
-list(APPEND LIBS "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
-list(APPEND LIBS_BENCHMARK "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
 
 ### Add config files
 # Doxygen documentation generation
