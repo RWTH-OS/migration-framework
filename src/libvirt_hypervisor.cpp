@@ -134,10 +134,22 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
+	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
 	// Destroy domain
 	if (virDomainDestroy(domain.get()) == -1)
 		throw std::runtime_error("Error destroying domain.");
+	// Wait until domain is shut down
+	BOOST_LOG_TRIVIAL(trace) << "Wait until domain is shut down.";
+	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
+		throw std::runtime_error("Failed getting domain info.");
+	while (domain_info.state != VIR_DOMAIN_SHUTOFF) {
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		BOOST_LOG_TRIVIAL(trace) << "Retry";
+		if (virDomainGetInfo(domain.get(), &domain_info) == -1)
+			throw std::runtime_error("Failed getting domain info.");
+	}
+	BOOST_LOG_TRIVIAL(trace) << "Domain is shut down.";
 }
 
 void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration)
