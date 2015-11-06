@@ -76,6 +76,14 @@ Result::Result(std::string vm_name, std::string status, std::string details) :
 {
 }
 
+Result::Result(std::string vm_name, std::string status, Time_measurement time_measurement, std::string details) :
+	vm_name(std::move(vm_name)),
+	status(std::move(status)),
+	details(std::move(details)),
+	time_measurement(std::move(time_measurement))
+{
+}
+
 YAML::Node Result::emit() const
 {
 	YAML::Node node;
@@ -83,6 +91,8 @@ YAML::Node Result::emit() const
 	node["status"] = status;
 	if (details != "")
 		node["details"] = details;
+	if (!time_measurement.empty())
+		node["time-measurement"] = time_measurement;
 	return node;
 }
 
@@ -293,13 +303,14 @@ std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::s
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Migrate::Migrate(std::string vm_name, std::string dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs) :
+Migrate::Migrate(std::string vm_name, std::string dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs, bool time_measurement) :
 	Sub_task::Sub_task(concurrent_execution),
 	vm_name(std::move(vm_name)),
 	dest_hostname(std::move(dest_hostname)),
 	live_migration(live_migration),
 	rdma_migration(rdma_migration),
-	pscom_hook_procs(pscom_hook_procs)
+	pscom_hook_procs(pscom_hook_procs),
+	time_measurement(time_measurement)
 {
 }
 
@@ -311,6 +322,7 @@ YAML::Node Migrate::emit() const
 	node["parameter"]["live-migration"] = live_migration;
 	node["parameter"]["rdma-migration"] = rdma_migration;
 	node["parameter"]["pscom-hook-procs"] = pscom_hook_procs;
+	node["parameter"]["time-measurement"] = time_measurement;
 	return node;
 }
 
@@ -322,6 +334,7 @@ void Migrate::load(const YAML::Node &node)
 	fast::load(live_migration, node["parameter"]["live-migration"]);
 	fast::load(rdma_migration, node["parameter"]["rdma-migration"]);
 	fast::load(pscom_hook_procs, node["parameter"]["pscom-hook-procs"], 0);
+	fast::load(time_measurement, node["parameter"]["time-measurement"], false);
 }
 
 std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
@@ -333,18 +346,22 @@ std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std
 	auto &live_migration = this->live_migration;
 	auto &rdma_migration = this->rdma_migration;
 	auto &pscom_hook_procs = this->pscom_hook_procs;
-	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, rdma_migration, pscom_hook_procs]
+	auto &enable_time_measurement = this->time_measurement;
+	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, rdma_migration, pscom_hook_procs, enable_time_measurement]
 	{
+		Time_measurement time_measurement(enable_time_measurement);
 		try {
+			time_measurement.tick("overall");
 			// Suspend pscom (resume in destructor)
-			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs, comm);
+			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs, comm, time_measurement);
 			// Start migration
-			hypervisor->migrate(vm_name, dest_hostname, live_migration, rdma_migration);
+			hypervisor->migrate(vm_name, dest_hostname, live_migration, rdma_migration, time_measurement);
 		} catch (const std::exception &e) {
 			BOOST_LOG_TRIVIAL(warning) << "Exception in migrate task: " << e.what();
-			return Result(vm_name, "error", e.what());
+			return Result(vm_name, "error", time_measurement, e.what());
 		}
-		return Result(vm_name, "success");
+		time_measurement.tock("overall");
+		return Result(vm_name, "success", time_measurement);
 	};
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }

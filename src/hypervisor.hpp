@@ -10,6 +10,7 @@
 #define HYPERVISOR_HPP
 
 #include "pci_device_handler.hpp"
+#include "time_measurement.hpp"
 
 #include <string>
 #include <vector>
@@ -51,7 +52,7 @@ public:
 	 * \param live_migration Enables live migration.
 	 * \param rdma_migration Enables rdma migration.
 	 */
-	virtual void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration) = 0;
+	virtual void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement) = 0;
 };
 
 #endif

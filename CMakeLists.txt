@@ -32,8 +32,8 @@ set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
 include_directories(SYSTEM ${BoostSourceDir})
-list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
-list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
+list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}" "${BoostTimerLibs}")
+list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}" "${BoostTimerLibs}")
 
 # fast-lib
 include(ExternalProject)
@@ -84,11 +84,13 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
+	${PROJECT_SOURCE_DIR}/src/time_measurement.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
+	${PROJECT_SOURCE_DIR}/src/time_measurement.cpp
 )
 
 ### Add config files

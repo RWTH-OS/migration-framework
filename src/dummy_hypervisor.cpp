@@ -29,9 +29,9 @@ void Dummy_hypervisor::stop(const std::string &vm_name, bool force)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
-void Dummy_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration)
+void Dummy_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement)
 {
-	(void) vm_name; (void) dest_hostname; (void) live_migration; (void) rdma_migration;
+	(void) vm_name; (void) dest_hostname; (void) live_migration; (void) rdma_migration; (void) time_measurement;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }

@@ -156,7 +156,7 @@ void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
 	BOOST_LOG_TRIVIAL(trace) << "Domain is shut down.";
 }
 
-void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration)
+void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement)
 {
 	BOOST_LOG_TRIVIAL(trace) << "Migrate " << vm_name << " to " << dest_hostname << ".";
 	BOOST_LOG_TRIVIAL(trace) << std::boolalpha << "live-migration=" << live_migration;
@@ -193,9 +193,11 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	BOOST_LOG_TRIVIAL(trace) << (rdma_migration ? "Use migrate uri: " + migrate_uri + "." : "Use default migrate uri.");
 	// Migrate domain
 	BOOST_LOG_TRIVIAL(trace) << "Migrate domain.";
+	time_measurement.tick("migrate");
 	std::unique_ptr<virDomain, Deleter_virDomain> dest_domain(
 		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, rdma_migration ? migrate_uri.c_str() : nullptr, 0)
 	);
+	time_measurement.tock("migrate");
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
 	// Set destination domain for guards
