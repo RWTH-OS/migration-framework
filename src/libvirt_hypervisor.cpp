@@ -13,10 +13,12 @@
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
 #include <boost/log/trivial.hpp>
+#include <libssh/libsshpp.hpp>
 
 #include <stdexcept>
 #include <memory>
-#include <iostream>
+#include <thread>
+#include <chrono>
 
 // Some deleter to be used with smart pointers.
 
@@ -36,6 +38,26 @@ struct Deleter_virDomain
 	}
 };
 
+void probe_ssh_connection(virDomainPtr domain)
+{
+	auto host = virDomainGetName(domain);
+	ssh::Session session;
+	session.setOption(SSH_OPTIONS_HOST, host);
+	bool success = false;
+	do {
+		try {
+			BOOST_LOG_TRIVIAL(trace) << "Try to connect to domain with SSH.";
+			session.connect();
+			BOOST_LOG_TRIVIAL(trace) << "Domain is ready.";
+			success = true;
+		} catch (ssh::SshException &e) {
+			BOOST_LOG_TRIVIAL(debug) << "Exception while connecting with SSH: " << e.getError();
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+		session.disconnect();
+	} while (!success);
+}
+
 //
 // Libvirt_hypervisor implementation
 //
@@ -52,7 +74,7 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
 	if (virConnectClose(local_host_conn)) {
-		std::cout << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!" << std::endl;
+		BOOST_LOG_TRIVIAL(trace) << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!";
 	}
 }
 
@@ -94,9 +116,11 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 		BOOST_LOG_TRIVIAL(trace) << "Attach device with PCI-ID " << pci_id.str();
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
+	// Wait for domain to boot
+	probe_ssh_connection(domain.get());
 }
 
-void Libvirt_hypervisor::stop(const std::string &vm_name)
+void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
 {
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
@@ -110,10 +134,26 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
+	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
-	// Destroy domain
-	if (virDomainDestroy(domain.get()) == -1)
-		throw std::runtime_error("Error destroying domain.");
+	// Destroy or shutdown domain
+	if (force) {
+		if (virDomainDestroy(domain.get()) == -1)
+			throw std::runtime_error("Error destroying domain.");
+	} else {
+		if (virDomainShutdown(domain.get()) == -1)
+			throw std::runtime_error("Error shutting domain down.");
+	}
+	// Wait until domain is shut down
+	BOOST_LOG_TRIVIAL(trace) << "Wait until domain is shut down.";
+	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
+		throw std::runtime_error("Failed getting domain info.");
+	while (domain_info.state != VIR_DOMAIN_SHUTOFF) {
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		if (virDomainGetInfo(domain.get(), &domain_info) == -1)
+			throw std::runtime_error("Failed getting domain info.");
+	}
+	BOOST_LOG_TRIVIAL(trace) << "Domain is shut down.";
 }
 
 void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration)
@@ -158,7 +198,10 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	);
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
+	// Set destination domain for guards
+	BOOST_LOG_TRIVIAL(trace) << "Set destination domain for guards.";
+	dev_guard.set_destination_domain(dest_domain.get());
 	// Reattach devices on destination.
 	BOOST_LOG_TRIVIAL(trace) << "Reattach devices on destination.";
-	dev_guard.reattach_on_destination(dest_domain.get());
+	dev_guard.reattach();
 }

@@ -14,11 +14,11 @@
 
 #include <fast-lib/communication/mqtt_communicator.hpp>
 #include <mosquittopp.h>
+#include <boost/regex.hpp>
 
 #include <unistd.h>
 #include <cstring>
 #include <climits>
-#include <regex>
 #include <exception>
 #include <stdexcept>
 #include <fstream>
@@ -40,15 +40,8 @@ Task_handler::Task_handler(const std::string &config_file) :
 		std::runtime_error(std::string("Failed getting hostname: ") + std::strerror(ret));
 	const std::string hostname(hostname_cstr, std::strlen(hostname_cstr));
 	// Replace placeholder for hostname in config
-// Regex are not implmented in gcc 4.8 so unfortunately the following cannot be used.
-//	std::regex hostname_regex("(<hostname>)");
-//	config = std::regex_replace(config, hostname_regex, hostname);
-	const std::string placeholder("<hostname>");
-	size_t start_pos = 0;
-	while ((start_pos = config.find(placeholder, start_pos)) != std::string::npos) {
-		config.replace(start_pos, placeholder.length(), hostname);
-		start_pos += hostname.length();
-	}
+	boost::regex hostname_regex("(<hostname>)");
+	config = boost::regex_replace(config, hostname_regex, hostname);
 	// Load config from string
 	from_string(config);
 }

@@ -55,8 +55,9 @@ public:
 	 *
 	 * Calls libvirt API to stop a virtual machine.
 	 * \param vm_name The name of the vm to stop.
+	 * \param force If true the domain is destroyed, else it is shut down gracefully.
 	 */
-	void stop(const std::string &vm_name);
+	void stop(const std::string &vm_name, bool force);
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *

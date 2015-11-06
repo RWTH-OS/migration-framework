@@ -251,9 +251,10 @@ std::future<Result> Start::execute(std::shared_ptr<Hypervisor> hypervisor, std::
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
-Stop::Stop(std::string vm_name, bool concurrent_execution) :
+Stop::Stop(std::string vm_name, bool force, bool concurrent_execution) :
 	Sub_task::Sub_task(concurrent_execution),
-	vm_name(std::move(vm_name))
+	vm_name(std::move(vm_name)),
+	force(force)
 {
 }
 
@@ -261,6 +262,7 @@ YAML::Node Stop::emit() const
 {
 	YAML::Node node = Sub_task::emit();
 	node["vm-name"] = vm_name;
+	node["force"] = force;
 	return node;
 }
 
@@ -268,6 +270,7 @@ void Stop::load(const YAML::Node &node)
 {
 	Sub_task::load(node);
 	fast::load(vm_name, node["vm-name"]);
+	fast::load(force, node["force"], false);
 }
 
 std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
@@ -276,10 +279,11 @@ std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::s
 	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
 	// This is for C++11 compability as in C++14 init captures should be used.
 	auto &vm_name = this->vm_name;
-	auto func = [hypervisor, vm_name]
+	auto &force = this->force;
+	auto func = [hypervisor, vm_name, force]
 	{
 		try {
-			hypervisor->stop(vm_name);
+			hypervisor->stop(vm_name, force);
 		} catch (const std::exception &e) {
 			BOOST_LOG_TRIVIAL(warning) << "Exception in stop task: " << e.what();
 			return Result(vm_name, "error", e.what());
