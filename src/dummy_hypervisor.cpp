@@ -22,9 +22,9 @@ void Dummy_hypervisor::start(const std::string &vm_name, unsigned int vcpus, uns
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
-void Dummy_hypervisor::stop(const std::string &vm_name) 
+void Dummy_hypervisor::stop(const std::string &vm_name, bool force)
 {
-	(void) vm_name;
+	(void) vm_name; (void) force;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }

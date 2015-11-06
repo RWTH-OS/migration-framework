@@ -224,7 +224,7 @@ public:
 	 * \param vm_name The name of the virtual machine to stop.
 	 * \param concurrent_execution Execute this Sub_task in dedicated thread.
 	 */
-	Stop(std::string vm_name, bool concurrent_execution);
+	Stop(std::string vm_name, bool force, bool concurrent_execution);
 	
 	/**
 	 * \brief Execute the Sub_task.
@@ -240,6 +240,7 @@ public:
 
 private:
 	std::string vm_name;
+	bool force;
 };
 YAML_CONVERT_IMPL(Stop)
 

@@ -120,7 +120,7 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 	probe_ssh_connection(domain.get());
 }
 
-void Libvirt_hypervisor::stop(const std::string &vm_name)
+void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
 {
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
@@ -136,16 +136,20 @@ void Libvirt_hypervisor::stop(const std::string &vm_name)
 		throw std::runtime_error("Domain not running.");
 	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
-	// Destroy domain
-	if (virDomainDestroy(domain.get()) == -1)
-		throw std::runtime_error("Error destroying domain.");
+	// Destroy or shutdown domain
+	if (force) {
+		if (virDomainDestroy(domain.get()) == -1)
+			throw std::runtime_error("Error destroying domain.");
+	} else {
+		if (virDomainShutdown(domain.get()) == -1)
+			throw std::runtime_error("Error shutting domain down.");
+	}
 	// Wait until domain is shut down
 	BOOST_LOG_TRIVIAL(trace) << "Wait until domain is shut down.";
 	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 		throw std::runtime_error("Failed getting domain info.");
 	while (domain_info.state != VIR_DOMAIN_SHUTOFF) {
 		std::this_thread::sleep_for(std::chrono::seconds(1));
-		BOOST_LOG_TRIVIAL(trace) << "Retry";
 		if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 			throw std::runtime_error("Failed getting domain info.");
 	}

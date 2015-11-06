@@ -46,7 +46,7 @@ public:
 	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to stop.
 	 */
-	void stop(const std::string &vm_name);
+	void stop(const std::string &vm_name, bool force);
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *

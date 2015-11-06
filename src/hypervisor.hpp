@@ -41,7 +41,7 @@ public:
 	 * A pure virtual method to provide an interface for stopping a virtual machine.
 	 * \param vm_name The name of the vm to stop.
 	 */
-	virtual void stop(const std::string &vm_name) = 0;
+	virtual void stop(const std::string &vm_name, bool force) = 0;
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
