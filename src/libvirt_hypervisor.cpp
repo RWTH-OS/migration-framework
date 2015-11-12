@@ -177,7 +177,7 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 		throw std::runtime_error("Domain not running.");
 	// Guard migration of PCI devices.
 	BOOST_LOG_TRIVIAL(trace) << "Create guard for device migration.";
-	Migrate_devices_guard dev_guard(pci_device_handler, domain.get());
+	Migrate_devices_guard dev_guard(pci_device_handler, domain.get(), time_measurement);
 	// Connect to destination
 	BOOST_LOG_TRIVIAL(trace) << "Connect to destination.";
 	std::unique_ptr<virConnect, Deleter_virConnect> dest_connection(

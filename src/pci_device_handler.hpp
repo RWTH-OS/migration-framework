@@ -9,6 +9,8 @@
 #ifndef PCI_DEVICE_HANDLER_HPP
 #define PCI_DEVICE_HANDLER_HPP
 
+#include "time_measurement.hpp"
+
 #include <fast-lib/serialization/serializable.hpp>
 
 #include <libvirt/libvirt.h>
@@ -134,7 +136,7 @@ private:
 class Migrate_devices_guard
 {
 public:
-	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, virDomainPtr domain);
+	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, virDomainPtr domain, Time_measurement &time_measurement);
 	~Migrate_devices_guard();
 
 	void set_destination_domain(virDomainPtr dest_domain);
@@ -143,6 +145,8 @@ private:
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	virDomainPtr domain;
 	std::unordered_map<PCI_id, size_t> detached_types_counts;
+	bool reattached;
+	Time_measurement &time_measurement;
 };
 
 #endif
