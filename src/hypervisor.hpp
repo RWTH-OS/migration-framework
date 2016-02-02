@@ -9,8 +9,10 @@
 #ifndef HYPERVISOR_HPP
 #define HYPERVISOR_HPP
 
-#include "pci_device_handler.hpp"
-#include "time_measurement.hpp"
+#include <fast-lib/message/migfra/pci_id.hpp>
+#include <fast-lib/message/migfra/time_measurement.hpp>
+using PCI_id = fast::msg::migfra::PCI_id;
+using Time_measurement = fast::msg::migfra::Time_measurement;
 
 #include <string>
 #include <vector>

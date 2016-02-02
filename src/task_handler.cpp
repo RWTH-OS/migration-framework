@@ -12,7 +12,7 @@
 #include "dummy_hypervisor.hpp"
 #include "task.hpp"
 
-#include <fast-lib/communication/mqtt_communicator.hpp>
+#include <fast-lib/mqtt_communicator.hpp>
 #include <mosquittopp.h>
 #include <boost/regex.hpp>
 
@@ -24,6 +24,8 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+
+using Task_container = fast::msg::migfra::Task_container;
 
 Task_handler::Task_handler(const std::string &config_file) : 
 	running(true)
@@ -58,15 +60,15 @@ void Task_handler::loop()
 		std::string msg;
 		try {
 			msg = comm->get_message();
-			Task task;	
-			task.from_string(msg);
-			task.execute(hypervisor, comm);
+			Task_container task_cont;	
+			task_cont.from_string(msg);
+			execute(task_cont, hypervisor, comm);
 		} catch (const YAML::Exception &e) {
 			std::cout << "Exception while parsing message." << std::endl;
 			std::cout << e.what() << std::endl;
 			std::cout << "msg dump: " << msg << std::endl;
-		} catch (const Task::no_task_exception &e) {
-			std::cout << "Debug: Parsed message not being a Task." << std::endl;
+		} catch (const Task_container::no_task_exception &e) {
+			std::cout << "Debug: Parsed message not being a Task_container." << std::endl;
 		} catch (const std::exception &e) {
 			if (e.what() == std::string("quit")) {
 				running = false;
