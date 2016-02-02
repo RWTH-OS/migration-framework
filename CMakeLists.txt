@@ -32,7 +32,7 @@ set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
 include_directories(SYSTEM ${BoostSourceDir})
-list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
+list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}" "${BoostTimerLibs}")
 list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 
 # fast-lib
@@ -45,10 +45,9 @@ ExternalProject_Add(
 ExternalProject_Get_Property(fastlib install_dir)
 include_directories("${install_dir}/include")
 include_directories(SYSTEM "${install_dir}/include/fast-lib/external")
-set(FASTLIB_SERIALIZATION_LIB "${install_dir}/lib/libfastlib_serialization.a")
-set(FASTLIB_COMMUNICATION_LIB "${install_dir}/lib/libfastlib_communication.a")
-list(APPEND LIBS "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
-list(APPEND LIBS_BENCHMARK "${FASTLIB_SERIALIZATION_LIB}" "${FASTLIB_COMMUNICATION_LIB}" "-lrt")
+set(FASTLIB "${install_dir}/lib/libfastlib.a")
+list(APPEND LIBS "${FASTLIB}" "-lrt")
+list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
 
 # libssh
 ExternalProject_Add(

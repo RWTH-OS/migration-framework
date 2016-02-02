@@ -4,11 +4,13 @@
 
 Suspend_pscom::Suspend_pscom(const std::string &vm_name,
 			     unsigned int messages_expected,
-			     std::shared_ptr<fast::Communicator> comm) :
+			     std::shared_ptr<fast::Communicator> comm,
+			     Time_measurement &time_measurement) :
 	vm_name(vm_name),
 	messages_expected(messages_expected),
 	answers(0),
-	qos(0)
+	qos(0),
+	time_measurement(time_measurement)
 {
 	request_topic = "fast/pscom/" + vm_name + "/any_proc/request";
 	response_topic = "fast/pscom/" + vm_name + "/+/response";
@@ -45,12 +47,14 @@ Suspend_pscom::~Suspend_pscom()
 void Suspend_pscom::suspend()
 {
 	if (messages_expected > 0) {
+		time_measurement.tick("pscom-suspend");
 		std::string msg = "*";
 		// publish suspend request
 		comm->send_message(msg, request_topic, qos);
 		// wait for termination
 		for (answers = 0; answers != messages_expected; ++answers)
 			comm->get_message(response_topic, std::chrono::seconds(10));
+		time_measurement.tock("pscom-resume");
 	}
 }
 
@@ -58,6 +62,7 @@ void Suspend_pscom::resume()
 {
 	// only try to resume if pscom is suspended
 	if (answers == messages_expected && messages_expected > 0) {
+		time_measurement.tick("pscom-resume");
 		std::string msg = "*";
 		// publish resume request
 		comm->send_message(msg, request_topic, qos);
@@ -66,5 +71,6 @@ void Suspend_pscom::resume()
 			comm->get_message(response_topic, std::chrono::seconds(10));
 		// reset answers counter
 		answers = 0;
+		time_measurement.tock("pscom-resume");
 	}
 }
