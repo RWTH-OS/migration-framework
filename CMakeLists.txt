@@ -39,9 +39,7 @@ list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${Boo
 include(ExternalProject)
 ExternalProject_Add(
 	fastlib
-#	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	GIT_REPOSITORY git@github.com:timohl/fast-lib.git
-	GIT_TAG messages
+	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
 )
 ExternalProject_Get_Property(fastlib install_dir)
@@ -85,13 +83,11 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
-#	${PROJECT_SOURCE_DIR}/src/time_measurement.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/hooks.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
-#	${PROJECT_SOURCE_DIR}/src/time_measurement.cpp
 )
 
 ### Add config files
