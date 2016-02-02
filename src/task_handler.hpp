@@ -11,8 +11,8 @@
 
 #include "hypervisor.hpp"
 
-#include <fast-lib/communication/communicator.hpp>
-#include <fast-lib/serialization/serializable.hpp>
+#include <fast-lib/communicator.hpp>
+#include <fast-lib/serializable.hpp>
 
 #include <memory>
 #include <string>

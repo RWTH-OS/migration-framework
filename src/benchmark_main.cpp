@@ -6,9 +6,9 @@
  * Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
  */
 
-#include <fast-lib/communication/mqtt_communicator.hpp>
+#include <fast-lib/mqtt_communicator.hpp>
 
-#include "task.hpp"
+#include <fast-lib/message/migfra/result.hpp>
 #include <boost/program_options.hpp>
 
 #include <iostream>
@@ -19,6 +19,8 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
+
+using Result_container = fast::msg::migfra::Result_container;
 
 std::string read_file(const std::string &file_name)
 {

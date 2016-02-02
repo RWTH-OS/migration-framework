@@ -1,12 +1,14 @@
 #ifndef HOOKS_HPP
 #define HOOKS_HPP
 
-#include "time_measurement.hpp"
+#include <fast-lib/message/migfra/time_measurement.hpp>
 
-#include <fast-lib/communication/mqtt_communicator.hpp>
+#include <fast-lib/mqtt_communicator.hpp>
 
 #include <memory>
 #include <string>
+
+using Time_measurement = fast::msg::migfra::Time_measurement;
 
 class Suspend_pscom
 {	

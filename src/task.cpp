@@ -10,6 +10,8 @@
 
 #include "hooks.hpp"
 
+#include <fast-lib/message/migfra/result.hpp>
+
 #include <boost/log/trivial.hpp>
 
 #include <exception>
@@ -17,6 +19,8 @@
 #include <utility>
 #include <iostream>
 #include <array>
+
+using namespace fast::msg::migfra;
 
 Thread_counter::Thread_counter()
 {
@@ -44,324 +48,71 @@ unsigned int Thread_counter::count;
 std::mutex Thread_counter::count_mutex;
 std::condition_variable Thread_counter::count_cv;
 
-Result_container::Result_container(const std::string &yaml_str)
+std::future<Result> execute(std::shared_ptr<Task> task, 
+		std::shared_ptr<Hypervisor> hypervisor, 
+		std::shared_ptr<fast::Communicator> comm)
 {
-	from_string(yaml_str);
-}
-
-Result_container::Result_container(std::string title, std::vector<Result> results) :
-	title(std::move(title)),
-	results(std::move(results))
-{
-}
-
-YAML::Node Result_container::emit() const
-{
-	YAML::Node node;
-	node["result"] = title;
-	node["list"] = results;
-	return node;
-}
-
-void Result_container::load(const YAML::Node &node)
-{
-	fast::load(title, node["result"]);
-	fast::load(results, node["list"]);
-}
-
-Result::Result(std::string vm_name, std::string status, std::string details) :
-	vm_name(std::move(vm_name)),
-	status(std::move(status)),
-	details(std::move(details))
-{
-}
-
-Result::Result(std::string vm_name, std::string status, Time_measurement time_measurement, std::string details) :
-	vm_name(std::move(vm_name)),
-	status(std::move(status)),
-	details(std::move(details)),
-	time_measurement(std::move(time_measurement))
-{
-}
-
-YAML::Node Result::emit() const
-{
-	YAML::Node node;
-	node["vm-name"] = vm_name;
-	node["status"] = status;
-	if (details != "")
-		node["details"] = details;
-	if (!time_measurement.empty())
-		node["time-measurement"] = time_measurement;
-	return node;
-}
-
-void Result::load(const YAML::Node &node)
-{
-	fast::load(vm_name, node["vm-name"]);
-	fast::load(status, node["status"]);
-	fast::load(details, node["details"], "");
-}
-
-Sub_task::Sub_task(bool concurrent_execution) :
-	concurrent_execution(concurrent_execution)
-{
-}
-
-YAML::Node Sub_task::emit() const
-{
-	YAML::Node node;
-	node["concurrent-execution"] = concurrent_execution;
-	return node;
-}
-
-void Sub_task::load(const YAML::Node &node)
-{
-	fast::load(concurrent_execution, node["concurrent-execution"], true);
-}
-
-Task::Task(std::vector<std::shared_ptr<Sub_task>> sub_tasks, bool concurrent_execution) :
-	sub_tasks(std::move(sub_tasks)), concurrent_execution(concurrent_execution)
-{
-}
-
-std::string Task::type(bool enable_result_format) const
-{
-	std::array<std::string, 3> types;
-	if (enable_result_format)
-		types = {{"vm started", "vm stopped", "vm migrated"}};
-	else
-		types = {{"start vm", "stop vm", "migrate vm"}};
-	if (sub_tasks.empty())
-		throw std::runtime_error("No subtasks available to get type.");
-	else if (std::dynamic_pointer_cast<Start>(sub_tasks.front()))
-		return types[0];
-	else if (std::dynamic_pointer_cast<Stop>(sub_tasks.front()))
-		return types[1];
-	else if (std::dynamic_pointer_cast<Migrate>(sub_tasks.front()))
-		return types[2];
-	else
-		throw std::runtime_error("Unknown type of Task.");
-
+	auto func = [task, hypervisor, comm]
+	{
+		fast::msg::migfra::Time_measurement time_measurement(task->time_measurement);
+		try {
+			time_measurement.tick("overall");
+			auto start_task = std::dynamic_pointer_cast<Start>(task);
+			auto stop_task = std::dynamic_pointer_cast<Stop>(task);
+			auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
+			if (start_task) {
+				hypervisor->start(start_task->vm_name, 
+						start_task->vcpus, 
+						start_task->memory, 
+						start_task->pci_ids);
+			} else if (stop_task) {
+				hypervisor->stop(stop_task->vm_name, 
+						stop_task->force);
+			} else if (migrate_task) {
+				// Suspend pscom (resume in destructor)
+				Suspend_pscom pscom_hook(migrate_task->vm_name,
+						migrate_task->pscom_hook_procs, comm,
+						time_measurement);
+				// Start migration
+				hypervisor->migrate(migrate_task->vm_name, 
+						migrate_task->dest_hostname,
+						migrate_task->live_migration, 
+						migrate_task->rdma_migration, 
+						time_measurement);
+			}
+		} catch (const std::exception &e) {
+			BOOST_LOG_TRIVIAL(warning) << "Exception in task: " << e.what();
+			return Result(task->vm_name, "error", time_measurement, e.what());
+		}
+		time_measurement.tock("overall");
+		return Result(task->vm_name, "success", time_measurement);
+	};
+	return std::async(task->concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
 
-YAML::Node Task::emit() const
+void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
-	YAML::Node node;
-	node["task"] = type();
-	node["vm-configurations"] = sub_tasks;
-	node["concurrent-execution"] = concurrent_execution;
-	return node;
-}
-
-template<class T> std::vector<std::shared_ptr<Sub_task>> load_sub_tasks(const YAML::Node &node)
-{
-	std::vector<std::shared_ptr<T>> sub_tasks;
-	fast::load(sub_tasks, node["vm-configurations"]);
-	return std::vector<std::shared_ptr<Sub_task>>(sub_tasks.begin(), sub_tasks.end());
-}
-
-// Specialization for Migrate due to different yaml structure (no "vm-configurations")
-template<> std::vector<std::shared_ptr<Sub_task>> load_sub_tasks<Migrate>(const YAML::Node &node)
-{
-	std::shared_ptr<Migrate> migrate_task;
-	fast::load(migrate_task, node);
-	return std::vector<std::shared_ptr<Sub_task>>(1, migrate_task);
-}
-
-void Task::load(const YAML::Node &node)
-{
-	std::string type;
-	try {
-		fast::load(type, node["task"]);
-	} catch (const std::exception &e) {
-		throw Task::no_task_exception("Cannot find key \"task\" to load Task from YAML.");
+	if (task_cont.tasks.empty()) {
+		BOOST_LOG_TRIVIAL(warning) << "Empty task container executed.";
+		return;
 	}
-	if (type == "start vm") {
-		sub_tasks = load_sub_tasks<Start>(node);
-	} else if (type == "stop vm") {
-		sub_tasks = load_sub_tasks<Stop>(node);
-	} else if (type == "migrate vm") {
-		sub_tasks = load_sub_tasks<Migrate>(node);
-	} else if (type == "quit") {
-		throw std::runtime_error("quit");
-	} else {
-		throw std::runtime_error("Unknown type of Task while loading.");
-	}
-	fast::load(concurrent_execution, node["concurrent-execution"], true);
-}
-
-void Task::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
-{
-	if (sub_tasks.empty()) return;
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
-	auto &sub_tasks = this->sub_tasks;
-	auto result_type = type(true);
-	auto func = [hypervisor, comm, sub_tasks, result_type]
+	auto &tasks = task_cont.tasks;
+	auto result_type = task_cont.type(true);
+	if (result_type == "quit") {
+		throw std::runtime_error("quit");
+	}
+	auto func = [hypervisor, comm, tasks, result_type]
 	{
 		std::vector<std::future<Result>> future_results;
-		for (auto &sub_task : sub_tasks) // start subtasks
-			future_results.push_back(sub_task->execute(hypervisor, comm));
+		for (auto &task : tasks) // start subtasks
+			future_results.push_back(execute(task, hypervisor, comm));
 		std::vector<Result> results;
-		for (auto &future_result : future_results) // wait for subtasks to finish
+		for (auto &future_result : future_results) // wait for tasks to finish
 			results.push_back(future_result.get());
 		comm->send_message(Result_container(result_type, results).to_string());
 	};
-	concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
+	task_cont.concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
 }
 
-Start::Start(std::string vm_name, unsigned int vcpus, unsigned long memory, std::vector<PCI_id> pci_ids, bool concurrent_execution) :
-	Sub_task::Sub_task(concurrent_execution),
-	vm_name(std::move(vm_name)),
-	vcpus(vcpus),
-	memory(memory),
-	pci_ids(std::move(pci_ids))
-{
-}
-
-YAML::Node Start::emit() const
-{
-	YAML::Node node = Sub_task::emit();
-	node["vm-name"] = vm_name;
-	node["vcpus"] = vcpus;
-	node["memory"] = memory;
-	node["pci-ids"] = pci_ids;
-	return node;
-}
-
-void Start::load(const YAML::Node &node)
-{
-	Sub_task::load(node);
-	fast::load(vm_name, node["vm-name"]);
-	fast::load(vcpus, node["vcpus"]);
-	fast::load(memory, node["memory"]);
-	fast::load(pci_ids, node["pci-ids"], std::vector<PCI_id>());
-}
-
-std::future<Result> Start::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
-{
-	(void) comm; // unused parameter
-	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
-	// This is for C++11 compability as in C++14 init captures should be used.
-	auto &vm_name = this->vm_name;
-	auto &vcpus = this->vcpus;
-	auto &memory = this->memory;
-	auto &pci_ids = this->pci_ids;
-	auto func = [hypervisor, vm_name, vcpus, memory, pci_ids]
-	{
-		try {
-			hypervisor->start(vm_name, vcpus, memory, pci_ids);
-		} catch (const std::exception &e) {
-			BOOST_LOG_TRIVIAL(warning) << "Exception in start task: " << e.what();
-			return Result(vm_name, "error", e.what());
-		}
-		return Result(vm_name, "success");
-	};
-	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
-}
-
-Stop::Stop(std::string vm_name, bool force, bool concurrent_execution) :
-	Sub_task::Sub_task(concurrent_execution),
-	vm_name(std::move(vm_name)),
-	force(force)
-{
-}
-
-YAML::Node Stop::emit() const
-{
-	YAML::Node node = Sub_task::emit();
-	node["vm-name"] = vm_name;
-	node["force"] = force;
-	return node;
-}
-
-void Stop::load(const YAML::Node &node)
-{
-	Sub_task::load(node);
-	fast::load(vm_name, node["vm-name"]);
-	fast::load(force, node["force"], false);
-}
-
-std::future<Result> Stop::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
-{
-	(void) comm; // unused parameter
-	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
-	// This is for C++11 compability as in C++14 init captures should be used.
-	auto &vm_name = this->vm_name;
-	auto &force = this->force;
-	auto func = [hypervisor, vm_name, force]
-	{
-		try {
-			hypervisor->stop(vm_name, force);
-		} catch (const std::exception &e) {
-			BOOST_LOG_TRIVIAL(warning) << "Exception in stop task: " << e.what();
-			return Result(vm_name, "error", e.what());
-		}
-		return Result(vm_name, "success");
-	};
-	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
-}
-
-Migrate::Migrate(std::string vm_name, std::string dest_hostname, bool live_migration, bool rdma_migration, bool concurrent_execution, unsigned int pscom_hook_procs, bool time_measurement) :
-	Sub_task::Sub_task(concurrent_execution),
-	vm_name(std::move(vm_name)),
-	dest_hostname(std::move(dest_hostname)),
-	live_migration(live_migration),
-	rdma_migration(rdma_migration),
-	pscom_hook_procs(pscom_hook_procs),
-	time_measurement(time_measurement)
-{
-}
-
-YAML::Node Migrate::emit() const
-{
-	YAML::Node node = Sub_task::emit();
-	node["vm-name"] = vm_name;
-	node["destination"] = dest_hostname;
-	node["parameter"]["live-migration"] = live_migration;
-	node["parameter"]["rdma-migration"] = rdma_migration;
-	node["parameter"]["pscom-hook-procs"] = pscom_hook_procs;
-	node["parameter"]["time-measurement"] = time_measurement;
-	return node;
-}
-
-void Migrate::load(const YAML::Node &node)
-{
-	Sub_task::load(node);
-	fast::load(vm_name, node["vm-name"]);
-	fast::load(dest_hostname, node["destination"]);
-	fast::load(live_migration, node["parameter"]["live-migration"]);
-	fast::load(rdma_migration, node["parameter"]["rdma-migration"]);
-	fast::load(pscom_hook_procs, node["parameter"]["pscom-hook-procs"], 0);
-	fast::load(time_measurement, node["parameter"]["time-measurement"], false);
-}
-
-std::future<Result> Migrate::execute(std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
-{
-	// The following refs allow the lambda function to copy the values instead of copying only the this ptr.
-	// This is for C++11 compability as in C++14 init captures should be used.
-	auto &vm_name = this->vm_name;
-	auto &dest_hostname = this->dest_hostname;
-	auto &live_migration = this->live_migration;
-	auto &rdma_migration = this->rdma_migration;
-	auto &pscom_hook_procs = this->pscom_hook_procs;
-	auto &enable_time_measurement = this->time_measurement;
-	auto func = [hypervisor, comm, vm_name, dest_hostname, live_migration, rdma_migration, pscom_hook_procs, enable_time_measurement]
-	{
-		Time_measurement time_measurement(enable_time_measurement);
-		try {
-			time_measurement.tick("overall");
-			// Suspend pscom (resume in destructor)
-			Suspend_pscom pscom_hook(vm_name, pscom_hook_procs, comm, time_measurement);
-			// Start migration
-			hypervisor->migrate(vm_name, dest_hostname, live_migration, rdma_migration, time_measurement);
-		} catch (const std::exception &e) {
-			BOOST_LOG_TRIVIAL(warning) << "Exception in migrate task: " << e.what();
-			return Result(vm_name, "error", time_measurement, e.what());
-		}
-		time_measurement.tock("overall");
-		return Result(vm_name, "success", time_measurement);
-	};
-	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
-}
