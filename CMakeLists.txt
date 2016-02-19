@@ -40,7 +40,8 @@ include(ExternalProject)
 ExternalProject_Add(
 	fastlib
 	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
+	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
+	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 ExternalProject_Get_Property(fastlib install_dir)
 include_directories("${install_dir}/include")
@@ -54,6 +55,7 @@ ExternalProject_Add(
 	libssh
 	GIT_REPOSITORY http://git.libssh.org/projects/libssh.git
 	GIT_TAG libssh-0.7.2
+	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 ExternalProject_Get_Property(libssh install_dir)
