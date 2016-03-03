@@ -12,13 +12,16 @@
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
-#include <boost/log/trivial.hpp>
+#include <fast-lib/log.hpp>
 #include <libssh/libsshpp.hpp>
 
 #include <stdexcept>
 #include <memory>
 #include <thread>
 #include <chrono>
+
+FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
+FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
 
 // Some deleter to be used with smart pointers.
 
@@ -46,12 +49,12 @@ void probe_ssh_connection(virDomainPtr domain)
 	bool success = false;
 	do {
 		try {
-			BOOST_LOG_TRIVIAL(trace) << "Try to connect to domain with SSH.";
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Try to connect to domain with SSH.";
 			session.connect();
-			BOOST_LOG_TRIVIAL(trace) << "Domain is ready.";
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is ready.";
 			success = true;
 		} catch (ssh::SshException &e) {
-			BOOST_LOG_TRIVIAL(debug) << "Exception while connecting with SSH: " << e.getError();
+			FASTLIB_LOG(libvirt_hyp_log, debug) << "Exception while connecting with SSH: " << e.getError();
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 		session.disconnect();
@@ -74,46 +77,46 @@ Libvirt_hypervisor::Libvirt_hypervisor() :
 Libvirt_hypervisor::~Libvirt_hypervisor()
 {
 	if (virConnectClose(local_host_conn)) {
-		BOOST_LOG_TRIVIAL(trace) << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!";
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!";
 	}
 }
 
 void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids)
 {
 	// Get domain by name
-	BOOST_LOG_TRIVIAL(trace) << "Get domain by name.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
 		virDomainLookupByName(local_host_conn, vm_name.c_str())
 	);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
 	// Get domain info + check if in shutdown state
-	BOOST_LOG_TRIVIAL(trace) << "Get domain info + check if in shutdown state.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info + check if in shutdown state.";
 	virDomainInfo domain_info;
 	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_SHUTOFF)
 		throw std::runtime_error("Wrong domain state: " + std::to_string(domain_info.state));
 	// Set memory
-	BOOST_LOG_TRIVIAL(trace) << "Set memory.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
 	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1)
 		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
 	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
 	// Set VCPUs
-	BOOST_LOG_TRIVIAL(trace) << "Set VCPUs.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set VCPUs.";
 	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_VCPU_MAXIMUM) == -1)
 		throw std::runtime_error("Error setting maximum number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
 	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
 	// Create domain
-	BOOST_LOG_TRIVIAL(trace) << "Create domain.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain.";
 	if (virDomainCreate(domain.get()) == -1)
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 	// Attach device
-	BOOST_LOG_TRIVIAL(trace) << "Attach " << pci_ids.size() << " devices.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << pci_ids.size() << " devices.";
 	for (auto &pci_id : pci_ids) {
-		BOOST_LOG_TRIVIAL(trace) << "Attach device with PCI-ID " << pci_id.str();
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach device with PCI-ID " << pci_id.str();
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
 	// Wait for domain to boot
@@ -145,7 +148,7 @@ void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
 			throw std::runtime_error("Error shutting domain down.");
 	}
 	// Wait until domain is shut down
-	BOOST_LOG_TRIVIAL(trace) << "Wait until domain is shut down.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
 	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 		throw std::runtime_error("Failed getting domain info.");
 	while (domain_info.state != VIR_DOMAIN_SHUTOFF) {
@@ -153,33 +156,33 @@ void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
 		if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 			throw std::runtime_error("Failed getting domain info.");
 	}
-	BOOST_LOG_TRIVIAL(trace) << "Domain is shut down.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
 }
 
 void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement)
 {
-	BOOST_LOG_TRIVIAL(trace) << "Migrate " << vm_name << " to " << dest_hostname << ".";
-	BOOST_LOG_TRIVIAL(trace) << std::boolalpha << "live-migration=" << live_migration;
-	BOOST_LOG_TRIVIAL(trace) << std::boolalpha << "rdma-migration=" << rdma_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << vm_name << " to " << dest_hostname << ".";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "live-migration=" << live_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "rdma-migration=" << rdma_migration;
 	// Get domain by name
-	BOOST_LOG_TRIVIAL(trace) << "Get domain by name.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
 		virDomainLookupByName(local_host_conn, vm_name.c_str())
 	);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
 	// Get domain info + check if in running state
-	BOOST_LOG_TRIVIAL(trace) << "Get domain info and check if in running state.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info and check if in running state.";
 	virDomainInfo domain_info;
 	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
 		throw std::runtime_error("Failed getting domain info.");
 	if (domain_info.state != VIR_DOMAIN_RUNNING)
 		throw std::runtime_error("Domain not running.");
 	// Guard migration of PCI devices.
-	BOOST_LOG_TRIVIAL(trace) << "Create guard for device migration.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
 	Migrate_devices_guard dev_guard(pci_device_handler, domain.get(), time_measurement);
 	// Connect to destination
-	BOOST_LOG_TRIVIAL(trace) << "Connect to destination.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to destination.";
 	std::unique_ptr<virConnect, Deleter_virConnect> dest_connection(
 		virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str())
 	);
@@ -190,9 +193,9 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;
 	// create migrateuri
 	std::string migrate_uri = rdma_migration ? "rdma://" + dest_hostname + "-ib" : "";
-	BOOST_LOG_TRIVIAL(trace) << (rdma_migration ? "Use migrate uri: " + migrate_uri + "." : "Use default migrate uri.");
+	FASTLIB_LOG(libvirt_hyp_log, trace) << (rdma_migration ? "Use migrate uri: " + migrate_uri + "." : "Use default migrate uri.");
 	// Migrate domain
-	BOOST_LOG_TRIVIAL(trace) << "Migrate domain.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
 	time_measurement.tick("migrate");
 	std::unique_ptr<virDomain, Deleter_virDomain> dest_domain(
 		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, rdma_migration ? migrate_uri.c_str() : nullptr, 0)
@@ -201,9 +204,9 @@ void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
 	// Set destination domain for guards
-	BOOST_LOG_TRIVIAL(trace) << "Set destination domain for guards.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
 	dev_guard.set_destination_domain(dest_domain.get());
 	// Reattach devices on destination.
-	BOOST_LOG_TRIVIAL(trace) << "Reattach devices on destination.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Reattach devices on destination.";
 	dev_guard.reattach();
 }
