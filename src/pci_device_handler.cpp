@@ -8,7 +8,7 @@
 
 #include "pci_device_handler.hpp"
 
-#include <boost/log/trivial.hpp>
+#include <fast-lib/log.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 //#include <boost/regex.hpp>
 
@@ -16,6 +16,9 @@
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
+
+FASTLIB_LOG_INIT(pcidev_handler_log, "PCI_device_handler")
+FASTLIB_LOG_SET_LEVEL_GLOBAL(lpcidev_handler_log, trace);
 
 // Some deleter to be used with smart pointers.
 
@@ -236,37 +239,37 @@ std::string Device::to_hostdev_xml() const
 std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr host_connection, PCI_id pci_id, bool sort_and_shuffle) const
 {
 	auto host_uri = convert_and_free_cstr(virConnectGetURI(host_connection));
-	BOOST_LOG_TRIVIAL(trace) << "Get devices on host " << host_uri << " with pci_id " << pci_id.str();
-	BOOST_LOG_TRIVIAL(trace) << "Lock while accessing device cache.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Get devices on host " << host_uri << " with pci_id " << pci_id.str();
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Lock while accessing device cache.";
 	std::unique_lock<std::mutex> lock(devices_mutex);
 	// If no entry found try to find and cache devices.
 	if (devices[host_uri][pci_id].empty()) {
-		BOOST_LOG_TRIVIAL(trace) << "No entry found.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "No entry found.";
 		// Find devices
-		BOOST_LOG_TRIVIAL(trace) << "Search for devices.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Search for devices.";
 		auto found_devices = list_all_node_devices_wrapper(host_connection, VIR_CONNECT_LIST_NODE_DEVICES_CAP_PCI_DEV);
 		// Fill cache with found devices
-		BOOST_LOG_TRIVIAL(trace) << "Filtering " << found_devices.size() << " found PCI devices.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Filtering " << found_devices.size() << " found PCI devices.";
 		for (const auto &device : found_devices) {
 			auto xml_desc = convert_and_free_cstr(virNodeDeviceGetXMLDesc(device.get(), 0));
 			auto found_device_id = xml_desc.find("<product id='" + pci_id.device_hex() + "'>");
 			auto found_vendor_id = xml_desc.find("<vendor id='" + pci_id.vendor_hex() + "'>");
 			if (found_device_id != std::string::npos && found_vendor_id != std::string::npos) {
 				auto dev = std::make_shared<Device>(std::move(xml_desc));
-				BOOST_LOG_TRIVIAL(trace) << "Adding device: " << dev->address.str();
+				FASTLIB_LOG(pcidev_handler_log, trace) << "Adding device: " << dev->address.str();
 				devices[host_uri][pci_id].push_back(dev);
 			}
 		}
 	}
 	// Copy devices from cache.
 	auto vec = devices[host_uri][pci_id];
-	BOOST_LOG_TRIVIAL(trace) << "Found " << vec.size() << " devices on cache.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Found " << vec.size() << " devices on cache.";
 	// Unlock since no access to devices cache is needed anymore.
-	BOOST_LOG_TRIVIAL(trace) << "Unlock since no access to device cache is needed anymore.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Unlock since no access to device cache is needed anymore.";
 	lock.unlock();
 	if (sort_and_shuffle) {
 		// Sort potentially attached devices to end of vector.
-		BOOST_LOG_TRIVIAL(trace) << "Sort potentially attached devices to end of vector.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Sort potentially attached devices to end of vector.";
 		std::sort(vec.begin(), vec.end(), 
 				[](const std::shared_ptr<Device> &lhs, const std::shared_ptr<Device> &rhs)
 				{
@@ -278,10 +281,10 @@ std::vector<std::shared_ptr<Device>> Device_cache::get_devices(virConnectPtr hos
 				{
 					return rhs->attached_hint == true;
 				});
-		BOOST_LOG_TRIVIAL(trace) << std::count_if(vec.begin(), sorted_part_end, 
+		FASTLIB_LOG(pcidev_handler_log, trace) << std::count_if(vec.begin(), sorted_part_end, 
 						[](const std::shared_ptr<Device>&){return true;})
 					 << " devices are marked as being not attached.";
-		BOOST_LOG_TRIVIAL(trace) << "Shuffle not attached devices.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Shuffle not attached devices.";
 		std::random_device random_seed;
 		std::minstd_rand random_generator(random_seed());
 		std::shuffle(vec.begin(), sorted_part_end, random_generator);
@@ -301,30 +304,30 @@ PCI_device_handler::PCI_device_handler() :
 void PCI_device_handler::attach(virDomainPtr domain, PCI_id pci_id)
 {
 	// Get connection the domain belongs to.
-	BOOST_LOG_TRIVIAL(trace) << "Get connection the domain belongs to.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Get connection the domain belongs to.";
 	auto connection = virDomainGetConnect(domain);
 	// Get vector of devices.
-	BOOST_LOG_TRIVIAL(trace) << "Get vector of devices.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Get vector of devices.";
 	auto devices = device_cache->get_devices(connection, pci_id);
 	if (devices.empty()) {
 		throw std::runtime_error("No devices of type \"" + pci_id.str() 
 			+ "\" found on \"" + convert_and_free_cstr(virConnectGetURI(connection)) + "\".");
 	}
 	// Try to attach a device until success or none is left.
-	BOOST_LOG_TRIVIAL(trace) << "Try to attach a device until success or none is left.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Try to attach a device until success or none is left.";
 	int ret = -1;
 	for (const auto &device : devices) {
-		BOOST_LOG_TRIVIAL(trace) << "Trying to attach device " << device->address.str();
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Trying to attach device " << device->address.str();
 		auto hostdev_xml = device->to_hostdev_xml();
-		BOOST_LOG_TRIVIAL(trace) << "Hostdev xml:";
-		BOOST_LOG_TRIVIAL(trace) << hostdev_xml;
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Hostdev xml:";
+		FASTLIB_LOG(pcidev_handler_log, trace) << hostdev_xml;
 		ret = virDomainAttachDevice(domain, hostdev_xml.c_str());
 		device->attached_hint = true;
 		if (ret == 0) {
-			BOOST_LOG_TRIVIAL(trace) << "Success attaching device.";
+			FASTLIB_LOG(pcidev_handler_log, trace) << "Success attaching device.";
 			break;
 		}
-		BOOST_LOG_TRIVIAL(trace) << "No success attaching device.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "No success attaching device.";
 	}
 	if (ret != 0)
 		throw std::runtime_error("No pci device could be attached");
@@ -333,21 +336,21 @@ void PCI_device_handler::attach(virDomainPtr domain, PCI_id pci_id)
 std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domain)
 {
 	// Parse domain xml to get all attached hostdevs.
-	BOOST_LOG_TRIVIAL(trace) << "Parse domain xml to get all attached hostdevs.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Parse domain xml to get all attached hostdevs.";
 	// TODO: Consider reusing hostdev xml descriptions instead of generating later from cached devices.
 	auto domain_xml = convert_and_free_cstr(virDomainGetXMLDesc(domain, 0));
 	auto domain_ptree = read_xml_from_string(domain_xml);
 	auto attached_devices = domain_ptree.get_child("domain.devices");
-	BOOST_LOG_TRIVIAL(trace) << "Find attached devices.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Find attached devices.";
 	std::vector<PCI_address> addresses;
 	for (const auto &device : attached_devices) {
 		if (device.first == "hostdev") {
 			addresses.push_back(make_pci_address_from_address_ptree(device.second.get_child("source")));
 		}
 	}
-	BOOST_LOG_TRIVIAL(trace) << "Found " << addresses.size() << " attached devices.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Found " << addresses.size() << " attached devices.";
 	// Get PCI-id of devices.
-	BOOST_LOG_TRIVIAL(trace) << "Get PCI-id of devices.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Get PCI-id of devices.";
 	// TODO: Add method to device cache to find devices 
 	auto connection = virDomainGetConnect(domain);	
 	std::unordered_map<PCI_id, std::vector<PCI_address>> id_addresses_map;
@@ -359,7 +362,7 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 		id_addresses_map[pci_id].push_back(std::move(address));
 	}
 	// Find devices in cache.
-	BOOST_LOG_TRIVIAL(trace) << "Find devices in cache.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Find devices in cache.";
 	std::vector<std::shared_ptr<Device>> devices;
 	for (const auto &id_addresses_pair : id_addresses_map) {
 		auto pci_id = id_addresses_pair.first;
@@ -375,11 +378,11 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 		}
 	}
 	// Detach and reset attached hint.
-	BOOST_LOG_TRIVIAL(trace) << "Detach and reset attached hint.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Detach and reset attached hint.";
 	for (const auto &device : devices) {
 		if (virDomainDetachDevice(domain, device->to_hostdev_xml().c_str()) != 0) {
 			auto domain_name = virDomainGetName(domain);
-			BOOST_LOG_TRIVIAL(trace) << "Error detaching device " << device->address.str() 
+			FASTLIB_LOG(pcidev_handler_log, trace) << "Error detaching device " << device->address.str() 
 						 << " from " << domain_name << ".";
 		}
 		device->attached_hint = false;
@@ -404,7 +407,7 @@ Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler>
 	reattached(false),
 	time_measurement(time_measurement)
 {
-	BOOST_LOG_TRIVIAL(trace) << "Detach all devices.";
+	FASTLIB_LOG(pcidev_handler_log, trace) << "Detach all devices.";
 	time_measurement.tick("detach-pci-devs");
 	detached_types_counts = pci_device_handler->detach(domain);
 	time_measurement.tock("detach-pci-devs");
@@ -415,7 +418,7 @@ Migrate_devices_guard::~Migrate_devices_guard()
 	try {
 		reattach();
 	} catch (...) {
-		BOOST_LOG_TRIVIAL(trace) << "Exception while reattaching devices.";
+		FASTLIB_LOG(pcidev_handler_log, trace) << "Exception while reattaching devices.";
 	}
 }
 
@@ -432,7 +435,7 @@ void Migrate_devices_guard::reattach()
 		time_measurement.tick("reattach-pci-devs");
 		for (auto &type_count : detached_types_counts) {
 			for (;type_count.second != 0; --type_count.second) {
-				BOOST_LOG_TRIVIAL(trace) << "Reattach device of type " << type_count.first.str();
+				FASTLIB_LOG(pcidev_handler_log, trace) << "Reattach device of type " << type_count.first.str();
 				pci_device_handler->attach(domain, type_count.first);
 			}
 		}

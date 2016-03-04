@@ -32,15 +32,17 @@ set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
 include_directories(SYSTEM ${BoostSourceDir})
-list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}" "${BoostTimerLibs}")
-list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
+list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
+list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 
 # fast-lib
 include(ExternalProject)
 ExternalProject_Add(
 	fastlib
 	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DUSE_BOOST_CACHE=ON -DBOOST_CACHE_DIR=${BOOST_CACHE_DIR}
+	GIT_TAG master
+	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
+	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=ON -DBUILD_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 ExternalProject_Get_Property(fastlib install_dir)
 include_directories("${install_dir}/include")
@@ -54,6 +56,7 @@ ExternalProject_Add(
 	libssh
 	GIT_REPOSITORY git://git.libssh.org/projects/libssh.git
 	GIT_TAG libssh-0.7.2
+	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 ExternalProject_Get_Property(libssh install_dir)
@@ -72,8 +75,6 @@ else()
 
 	message(SEND_ERROR "libvirt is required.")
 endif()
-#include_directories(SYSTEM /global/cluster/libvirt-1.2.16/include)
-#list(APPEND LIBS "/global/cluster/libvirt-1.2.16/lib/libvirt.so")
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp

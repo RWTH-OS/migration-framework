@@ -11,14 +11,16 @@
 #include "hooks.hpp"
 
 #include <fast-lib/message/migfra/result.hpp>
-
-#include <boost/log/trivial.hpp>
+#include <fast-lib/log.hpp>
 
 #include <exception>
 #include <future>
 #include <utility>
 #include <iostream>
 #include <array>
+
+FASTLIB_LOG_INIT(migfra_task_log, "Task")
+FASTLIB_LOG_SET_LEVEL_GLOBAL(migfra_task_log, trace);
 
 using namespace fast::msg::migfra;
 
@@ -81,7 +83,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 						time_measurement);
 			}
 		} catch (const std::exception &e) {
-			BOOST_LOG_TRIVIAL(warning) << "Exception in task: " << e.what();
+			FASTLIB_LOG(migfra_task_log, warning) << "Exception in task: " << e.what();
 			return Result(task->vm_name, "error", time_measurement, e.what());
 		}
 		time_measurement.tock("overall");
@@ -94,7 +96,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	if (task_cont.tasks.empty()) {
-		BOOST_LOG_TRIVIAL(warning) << "Empty task container executed.";
+		FASTLIB_LOG(migfra_task_log, warning) << "Empty task container executed.";
 		return;
 	}
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
