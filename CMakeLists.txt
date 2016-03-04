@@ -33,16 +33,14 @@ set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
 include(add_boost)
 include_directories(SYSTEM ${BoostSourceDir})
 list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
-#list(APPEND LIBS "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}" "${BoostTimerLibs}")
-list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostLogLibs}" "${BoostChronoLibs}" "${BoostDateTimeLibs}" "${BoostFilesystemLibs}" "${BoostThreadLibs}" "${BoostSystemLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
+list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs}" "${BoostRegexLibs}")
 
 # fast-lib
 include(ExternalProject)
 ExternalProject_Add(
 	fastlib
-#	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	GIT_REPOSITORY git@github.com:timohl/fast-lib.git
-	GIT_TAG no-boost
+	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
+	GIT_TAG master
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=ON -DBUILD_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
@@ -77,8 +75,6 @@ else()
 
 	message(SEND_ERROR "libvirt is required.")
 endif()
-#include_directories(SYSTEM /global/cluster/libvirt-1.2.16/include)
-#list(APPEND LIBS "/global/cluster/libvirt-1.2.16/lib/libvirt.so")
 
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
