@@ -102,10 +102,11 @@ void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hyperv
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &tasks = task_cont.tasks;
 	auto result_type = task_cont.type(true);
+	auto &id = task_cont.id;
 	if (result_type == "quit") {
 		throw std::runtime_error("quit");
 	}
-	auto func = [hypervisor, comm, tasks, result_type]
+	auto func = [hypervisor, comm, tasks, result_type, id]
 	{
 		std::vector<std::future<Result>> future_results;
 		for (auto &task : tasks) // start subtasks
@@ -113,7 +114,7 @@ void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hyperv
 		std::vector<Result> results;
 		for (auto &future_result : future_results) // wait for tasks to finish
 			results.push_back(future_result.get());
-		comm->send_message(Result_container(result_type, results).to_string());
+		comm->send_message(Result_container(result_type, results, id).to_string());
 	};
 	task_cont.concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
 }
