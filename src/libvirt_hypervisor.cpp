@@ -157,9 +157,10 @@ void set_memory(virDomainPtr domain, unsigned long memory)
 void set_max_memory(virDomainPtr domain, unsigned long memory)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
-	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1)
+	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1) {
 		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) 
 				+ " KiB.");
+	}
 }
 
 void set_max_vcpus(virDomainPtr domain, unsigned int vcpus)
