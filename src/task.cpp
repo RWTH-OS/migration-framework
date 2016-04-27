@@ -63,24 +63,18 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 			auto stop_task = std::dynamic_pointer_cast<Stop>(task);
 			auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
 			if (start_task) {
-				hypervisor->start(start_task->vm_name, 
-						start_task->vcpus, 
-						start_task->memory, 
-						start_task->pci_ids);
+				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
-				hypervisor->stop(stop_task->vm_name, 
-						stop_task->force);
+				hypervisor->stop(*stop_task, time_measurement);
 			} else if (migrate_task) {
 				// Suspend pscom (resume in destructor)
+				// TODO: pass whole migrate task
 				Suspend_pscom pscom_hook(migrate_task->vm_name,
-						migrate_task->pscom_hook_procs, comm,
+						migrate_task->pscom_hook_procs, 
+						comm,
 						time_measurement);
 				// Start migration
-				hypervisor->migrate(migrate_task->vm_name, 
-						migrate_task->dest_hostname,
-						migrate_task->live_migration, 
-						migrate_task->rdma_migration, 
-						time_measurement);
+				hypervisor->migrate(*migrate_task, time_measurement);
 			}
 		} catch (const std::exception &e) {
 			FASTLIB_LOG(migfra_task_log, warning) << "Exception in task: " << e.what();

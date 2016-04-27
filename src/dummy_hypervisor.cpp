@@ -15,23 +15,23 @@ Dummy_hypervisor::Dummy_hypervisor(bool never_throw) noexcept :
 {
 }
 
-void Dummy_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids)
+void Dummy_hypervisor::start(const fast::msg::migfra::Start &task, fast::msg::migfra::Time_measurement &time_measurement)
 {
-	(void) vm_name; (void) vcpus; (void) memory; (void) pci_ids;
+	(void) task; (void) time_measurement;;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
-void Dummy_hypervisor::stop(const std::string &vm_name, bool force)
+void Dummy_hypervisor::stop(const fast::msg::migfra::Stop &task, fast::msg::migfra::Time_measurement &time_measurement)
 {
-	(void) vm_name; (void) force;
+	(void) task; (void) time_measurement;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
-void Dummy_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement)
+void Dummy_hypervisor::migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement)
 {
-	(void) vm_name; (void) dest_hostname; (void) live_migration; (void) rdma_migration; (void) time_measurement;
+	(void) task; (void) time_measurement;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }

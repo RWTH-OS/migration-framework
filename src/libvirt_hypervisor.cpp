@@ -20,6 +20,8 @@
 #include <thread>
 #include <chrono>
 
+using namespace fast::msg::migfra;
+
 FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
 
@@ -65,7 +67,7 @@ void probe_ssh_connection(virDomainPtr domain)
 // Libvirt_hypervisor implementation
 //
 
-/// TODO: Get hostname dynamically.
+/// TODO: Use dedicated connect function with error handling.
 Libvirt_hypervisor::Libvirt_hypervisor() :
 	local_host_conn(virConnectOpen("qemu:///system")),
 	pci_device_handler(std::make_shared<PCI_device_handler>())
@@ -81,41 +83,131 @@ Libvirt_hypervisor::~Libvirt_hypervisor()
 	}
 }
 
-void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids)
+std::unique_ptr<virDomain, Deleter_virDomain> define_from_xml(virConnectPtr conn, const std::string &xml)
 {
-	// Get domain by name
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Define persistant domain from xml";
+	std::unique_ptr<virDomain, Deleter_virDomain> domain(
+			virDomainDefineXML(conn, xml.c_str())
+	);
+	if (!domain)
+		throw std::runtime_error("Error defining domain from xml.");
+	return std::move(domain);
+}
+
+std::unique_ptr<virDomain, Deleter_virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain from xml";
+	std::unique_ptr<virDomain, Deleter_virDomain> domain(
+			virDomainCreateXML(conn, xml.c_str(), VIR_DOMAIN_NONE)
+	);
+	if (!domain)
+		throw std::runtime_error("Error creating domain from xml.");
+	return std::move(domain);
+}
+
+std::unique_ptr<virDomain, Deleter_virDomain> find_by_name(virConnectPtr conn, const std::string &name)
+{
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-		virDomainLookupByName(local_host_conn, vm_name.c_str())
+		virDomainLookupByName(conn, name.c_str())
 	);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
-	// Get domain info + check if in shutdown state
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info + check if in shutdown state.";
-	virDomainInfo domain_info;
-	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
-		throw std::runtime_error("Failed getting domain info.");
-	if (domain_info.state != VIR_DOMAIN_SHUTOFF)
-		throw std::runtime_error("Wrong domain state: " + std::to_string(domain_info.state));
-	// Set memory
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
-	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1)
-		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
-	if (virDomainSetMemoryFlags(domain.get(), memory, VIR_DOMAIN_AFFECT_CONFIG) == -1)
-		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory) + " KiB for domain " + vm_name);
-	// Set VCPUs
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set VCPUs.";
-	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_VCPU_MAXIMUM) == -1)
-		throw std::runtime_error("Error setting maximum number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
-	if (virDomainSetVcpusFlags(domain.get(), vcpus, VIR_DOMAIN_AFFECT_CONFIG) == -1)
-		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus) + " for domain " + vm_name);
-	// Create domain
+	return std::move(domain);
+}
+
+void create(virDomainPtr domain)
+{
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain.";
-	if (virDomainCreate(domain.get()) == -1)
+	if (virDomainCreate(domain) == -1)
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
-	// Attach device
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << pci_ids.size() << " devices.";
-	for (auto &pci_id : pci_ids) {
+}
+
+unsigned char get_domain_state(virDomainPtr domain)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info.";
+	virDomainInfo domain_info;
+	if (virDomainGetInfo(domain, &domain_info) == -1)
+		throw std::runtime_error("Failed getting domain info.");
+	return domain_info.state;
+}
+
+void check_state(virDomainPtr domain, virDomainState expected_state)
+{
+	auto state = get_domain_state(domain);
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Check domain state.";
+	if (state != expected_state)
+		throw std::runtime_error("Wrong domain state: " + std::to_string(state));
+}
+void wait_for_state(virDomainPtr domain, virDomainState expected_state)
+{
+	// TODO: Implement timeout
+	while (get_domain_state(domain) != expected_state) {
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+	}
+}
+
+void set_memory(virDomainPtr domain, unsigned long memory)
+{
+	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG) == -1)
+		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory)
+				+ " KiB.");
+}
+
+void set_max_memory(virDomainPtr domain, unsigned long memory)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
+	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1)
+		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) 
+				+ " KiB.");
+}
+
+void set_max_vcpus(virDomainPtr domain, unsigned int vcpus)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set VCPUs.";
+	if (virDomainSetVcpusFlags(domain, vcpus, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_VCPU_MAXIMUM) == -1)
+		throw std::runtime_error("Error setting maximum number of vcpus to " + std::to_string(vcpus)
+				+ ".");
+}
+
+void set_vcpus(virDomainPtr domain, unsigned int vcpus)
+{
+	if (virDomainSetVcpusFlags(domain, vcpus, VIR_DOMAIN_AFFECT_CONFIG) == -1)
+		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus)
+				+ ".");
+}
+
+void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measurement)
+{
+	(void) time_measurement;
+	// Get domain
+	std::unique_ptr<virDomain, Deleter_virDomain> domain;
+	if (task.xml.is_valid()) {
+		// Define domain from XML
+		domain = define_from_xml(local_host_conn, task.xml);
+	} else {
+		// Find existing domain
+		domain = find_by_name(local_host_conn, task.vm_name);
+		// Get domain info + check if in shutdown state
+		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
+	}
+	// Set memory
+	if (task.memory.is_valid()) {
+		// TODO: Add separat max memory option
+		set_max_memory(domain.get(), task.memory);
+		set_memory(domain.get(), task.memory);
+	}
+	// Set VCPUs
+	if (task.vcpus.is_valid()) {
+		// TODO: Add separat max vcpus option
+		set_max_vcpus(domain.get(), task.vcpus);
+		set_vcpus(domain.get(), task.vcpus);
+	}
+	// Start domain
+	create(domain.get());
+	// Attach devices
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_ids.size() << " devices.";
+	for (auto &pci_id : task.pci_ids) {
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach device with PCI-ID " << pci_id.str();
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
@@ -123,24 +215,19 @@ void Libvirt_hypervisor::start(const std::string &vm_name, unsigned int vcpus, u
 	probe_ssh_connection(domain.get());
 }
 
-void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
+void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measurement)
 {
+	(void) time_measurement;
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-		virDomainLookupByName(local_host_conn, vm_name.c_str())
+		find_by_name(local_host_conn, task.vm_name)
 	);
-	if (!domain)
-		throw std::runtime_error("Domain not found.");
 	// Get domain info + check if in running state
-	virDomainInfo domain_info;
-	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
-		throw std::runtime_error("Failed getting domain info.");
-	if (domain_info.state != VIR_DOMAIN_RUNNING)
-		throw std::runtime_error("Domain not running.");
+	check_state(domain.get(), VIR_DOMAIN_RUNNING);
 	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
 	// Destroy or shutdown domain
-	if (force) {
+	if (task.force) {
 		if (virDomainDestroy(domain.get()) == -1)
 			throw std::runtime_error("Error destroying domain.");
 	} else {
@@ -149,39 +236,29 @@ void Libvirt_hypervisor::stop(const std::string &vm_name, bool force)
 	}
 	// Wait until domain is shut down
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
-	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
-		throw std::runtime_error("Failed getting domain info.");
-	while (domain_info.state != VIR_DOMAIN_SHUTOFF) {
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-		if (virDomainGetInfo(domain.get(), &domain_info) == -1)
-			throw std::runtime_error("Failed getting domain info.");
-	}
+	wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF);
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
 }
 
-void Libvirt_hypervisor::migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement)
+void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << vm_name << " to " << dest_hostname << ".";
-	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "live-migration=" << live_migration;
-	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "rdma-migration=" << rdma_migration;
+	const std::string &dest_hostname = task.dest_hostname;
+	bool live_migration = task.live_migration;
+	bool rdma_migration = task.rdma_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "live-migration=" << task.live_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "rdma-migration=" << task.rdma_migration;
 	// Get domain by name
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-		virDomainLookupByName(local_host_conn, vm_name.c_str())
+		find_by_name(local_host_conn, task.vm_name)
 	);
-	if (!domain)
-		throw std::runtime_error("Domain not found.");
 	// Get domain info + check if in running state
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info and check if in running state.";
-	virDomainInfo domain_info;
-	if (virDomainGetInfo(domain.get(), &domain_info) == -1)
-		throw std::runtime_error("Failed getting domain info.");
-	if (domain_info.state != VIR_DOMAIN_RUNNING)
-		throw std::runtime_error("Domain not running.");
+	check_state(domain.get(), VIR_DOMAIN_RUNNING);
 	// Guard migration of PCI devices.
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
 	Migrate_devices_guard dev_guard(pci_device_handler, domain.get(), time_measurement);
 	// Connect to destination
+	// TODO: Move to dedicated function
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to destination.";
 	std::unique_ptr<virConnect, Deleter_virConnect> dest_connection(
 		virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str())
