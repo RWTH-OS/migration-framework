@@ -56,31 +56,26 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 {
 	auto func = [task, hypervisor, comm]
 	{
-		fast::msg::migfra::Time_measurement time_measurement(task->time_measurement);
+		fast::msg::migfra::Time_measurement time_measurement(task->time_measurement.is_valid() ? task->time_measurement.get() : false);
 		try {
 			time_measurement.tick("overall");
 			auto start_task = std::dynamic_pointer_cast<Start>(task);
 			auto stop_task = std::dynamic_pointer_cast<Stop>(task);
 			auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
 			if (start_task) {
-				hypervisor->start(start_task->vm_name, 
-						start_task->vcpus, 
-						start_task->memory, 
-						start_task->pci_ids);
+				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
-				hypervisor->stop(stop_task->vm_name, 
-						stop_task->force);
+				hypervisor->stop(*stop_task, time_measurement);
 			} else if (migrate_task) {
 				// Suspend pscom (resume in destructor)
+				// TODO: pass whole migrate task
+				auto procs = migrate_task->pscom_hook_procs.is_valid() ? migrate_task->pscom_hook_procs.get() : 0;
 				Suspend_pscom pscom_hook(migrate_task->vm_name,
-						migrate_task->pscom_hook_procs, comm,
+						procs,
+						comm,
 						time_measurement);
 				// Start migration
-				hypervisor->migrate(migrate_task->vm_name, 
-						migrate_task->dest_hostname,
-						migrate_task->live_migration, 
-						migrate_task->rdma_migration, 
-						time_measurement);
+				hypervisor->migrate(*migrate_task, time_measurement);
 			}
 		} catch (const std::exception &e) {
 			FASTLIB_LOG(migfra_task_log, warning) << "Exception in task: " << e.what();
@@ -89,7 +84,8 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 		time_measurement.tock("overall");
 		return Result(task->vm_name, "success", time_measurement);
 	};
-	return std::async(task->concurrent_execution ? std::launch::async : std::launch::deferred, func);
+	bool concurrent_execution = !task->concurrent_execution.is_valid() || task->concurrent_execution.get();
+	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
 
@@ -114,8 +110,12 @@ void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hyperv
 		std::vector<Result> results;
 		for (auto &future_result : future_results) // wait for tasks to finish
 			results.push_back(future_result.get());
-		comm->send_message(Result_container(result_type, results, id).to_string());
+		if (id.is_valid())
+			comm->send_message(Result_container(result_type, results, id).to_string());
+		else
+			comm->send_message(Result_container(result_type, results).to_string());
 	};
-	task_cont.concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
+	bool concurrent_execution = !task_cont.concurrent_execution.is_valid() || task_cont.concurrent_execution.get();
+	concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
 }
 

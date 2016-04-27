@@ -9,6 +9,7 @@
 #ifndef HYPERVISOR_HPP
 #define HYPERVISOR_HPP
 
+#include <fast-lib/message/migfra/task.hpp>
 #include <fast-lib/message/migfra/pci_id.hpp>
 #include <fast-lib/message/migfra/time_measurement.hpp>
 using PCI_id = fast::msg::migfra::PCI_id;
@@ -37,14 +38,14 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	virtual void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids) = 0;
+	virtual void start(const fast::msg::migfra::Start &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
 	 * A pure virtual method to provide an interface for stopping a virtual machine.
 	 * \param vm_name The name of the vm to stop.
 	 */
-	virtual void stop(const std::string &vm_name, bool force) = 0;
+	virtual void stop(const fast::msg::migfra::Stop &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
@@ -54,7 +55,7 @@ public:
 	 * \param live_migration Enables live migration.
 	 * \param rdma_migration Enables rdma migration.
 	 */
-	virtual void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement) = 0;
+	virtual void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
 };
 
 #endif

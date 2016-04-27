@@ -39,8 +39,9 @@ list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs
 include(ExternalProject)
 ExternalProject_Add(
 	fastlib
-	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
-	GIT_TAG master
+#	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
+	GIT_REPOSITORY git@github.com:timohl/fast-lib.git
+	GIT_TAG optional
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=ON -DBUILD_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
@@ -116,6 +117,7 @@ configure_file(
 # Add executable
 add_executable(migfra ${SRC})
 add_executable(migfra_benchmark ${SRC_BENCHMARK})
-
+add_dependencies(migfra fastlib libssh)
+add_dependencies(migfra_benchmark fastlib)
 target_link_libraries(migfra ${LIBS})
 target_link_libraries(migfra_benchmark ${LIBS_BENCHMARK})
