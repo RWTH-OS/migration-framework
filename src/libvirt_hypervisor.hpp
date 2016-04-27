@@ -24,6 +24,7 @@ class PCI_device_handler;
  * This class implements the Hypervisor interface.
  * It provides methods to start, stop and migrate virtual machines.
  * \todo: Consider adding copy/move constructor implementation.
+ * \todo: Fix documentation of parameters.
  */
 class Libvirt_hypervisor :
 	public Hypervisor
@@ -49,7 +50,7 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids);
+	void start(const fast::msg::migfra::Start &task, fast::msg::migfra::Time_measurement &time_measurement);
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
@@ -57,7 +58,7 @@ public:
 	 * \param vm_name The name of the vm to stop.
 	 * \param force If true the domain is destroyed, else it is shut down gracefully.
 	 */
-	void stop(const std::string &vm_name, bool force);
+	void stop(const fast::msg::migfra::Stop &task, fast::msg::migfra::Time_measurement &time_measurement);
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
@@ -69,7 +70,7 @@ public:
 	 * \param rdma_migration Enables rdma migration.
 	 * \param time_measurement Time measurement facility.
 	 */
-	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement);
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement);
 private:
 	virConnectPtr local_host_conn;	
 	std::shared_ptr<PCI_device_handler> pci_device_handler;

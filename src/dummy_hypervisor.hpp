@@ -38,7 +38,7 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	void start(const std::string &vm_name, unsigned int vcpus, unsigned long memory, const std::vector<PCI_id> &pci_ids);
+	void start(const fast::msg::migfra::Start &task, fast::msg::migfra::Time_measurement &time_measurement);
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
@@ -46,7 +46,7 @@ public:
 	 * Never throws if never_throw is true, else it throws.
 	 * \param vm_name The name of the vm to stop.
 	 */
-	void stop(const std::string &vm_name, bool force);
+	void stop(const fast::msg::migfra::Stop &task, fast::msg::migfra::Time_measurement &time_measurement);
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
@@ -57,7 +57,7 @@ public:
 	 * \param live_migration Enables live migration.
 	 * \param rdma_migration Enables rdma migration.
 	 */
-	void migrate(const std::string &vm_name, const std::string &dest_hostname, bool live_migration, bool rdma_migration, Time_measurement &time_measurement);
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement);
 private:
 	const bool never_throw;
 };
