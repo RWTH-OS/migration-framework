@@ -11,6 +11,7 @@
 #include "libvirt_hypervisor.hpp"
 #include "dummy_hypervisor.hpp"
 #include "task.hpp"
+#include "pscom_handler.hpp"
 
 #include <fast-lib/mqtt_communicator.hpp>
 #include <mosquittopp.h>
@@ -128,6 +129,15 @@ void Task_handler::load(const YAML::Node &node)
 		} else {
 			throw std::invalid_argument("Unknown communcation type in configuration found");
 		}
+	}
+	if (node["pscom-handler"]) {
+		auto pscom_node = node["pscom-handler"];
+		if (pscom_node["request-topic"])
+			Pscom_handler::set_request_topic_template(pscom_node["request-topic"].as<std::string>());
+		if (pscom_node["response-topic"])
+			Pscom_handler::set_response_topic_template(pscom_node["response-topic"].as<std::string>());
+		if (pscom_node["qos"])
+			Pscom_handler::set_qos(pscom_node["qos"].as<int>());
 	}
 }
 

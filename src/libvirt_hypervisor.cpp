@@ -284,7 +284,4 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	// Set destination domain for guards
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
 	dev_guard.set_destination_domain(dest_domain.get());
-	// Reattach devices on destination.
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Reattach devices on destination.";
-	dev_guard.reattach();
 }

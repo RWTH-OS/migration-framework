@@ -404,7 +404,6 @@ Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler>
 		virDomainPtr domain, Time_measurement &time_measurement) :
 	pci_device_handler(pci_device_handler),
 	domain(domain),
-	reattached(false),
 	time_measurement(time_measurement)
 {
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Detach all devices.";
@@ -418,7 +417,11 @@ Migrate_devices_guard::~Migrate_devices_guard()
 	try {
 		reattach();
 	} catch (...) {
-		FASTLIB_LOG(pcidev_handler_log, trace) << "Exception while reattaching devices.";
+		// Only log exception when unwinding stack, else rethrow exception.
+		if (std::uncaught_exception())
+			FASTLIB_LOG(pcidev_handler_log, trace) << "Exception while reattaching devices.";
+		else
+			throw;
 	}
 }
 
@@ -430,15 +433,12 @@ void Migrate_devices_guard::set_destination_domain(virDomainPtr dest_domain)
 
 void Migrate_devices_guard::reattach()
 {
-	if (!reattached) {
-		reattached = true;
-		time_measurement.tick("reattach-pci-devs");
-		for (auto &type_count : detached_types_counts) {
-			for (;type_count.second != 0; --type_count.second) {
-				FASTLIB_LOG(pcidev_handler_log, trace) << "Reattach device of type " << type_count.first.str();
-				pci_device_handler->attach(domain, type_count.first);
-			}
+	time_measurement.tick("reattach-pci-devs");
+	for (auto &type_count : detached_types_counts) {
+		for (;type_count.second != 0; --type_count.second) {
+			FASTLIB_LOG(pcidev_handler_log, trace) << "Reattach device of type " << type_count.first.str();
+			pci_device_handler->attach(domain, type_count.first);
 		}
-		time_measurement.tock("reattach-pci-devs");
 	}
+	time_measurement.tock("reattach-pci-devs");
 }

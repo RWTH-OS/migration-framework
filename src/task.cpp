@@ -8,7 +8,7 @@
 
 #include "task.hpp"
 
-#include "hooks.hpp"
+#include "pscom_handler.hpp"
 
 #include <fast-lib/message/migfra/result.hpp>
 #include <fast-lib/log.hpp>
@@ -69,11 +69,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 			} else if (migrate_task) {
 				// Suspend pscom (resume in destructor)
 				// TODO: pass whole migrate task
-				auto procs = migrate_task->pscom_hook_procs.is_valid() ? migrate_task->pscom_hook_procs.get() : 0;
-				Suspend_pscom pscom_hook(migrate_task->vm_name,
-						procs,
-						comm,
-						time_measurement);
+				Pscom_handler pscom_handler(*migrate_task, comm, time_measurement);
 				// Start migration
 				hypervisor->migrate(*migrate_task, time_measurement);
 			}
