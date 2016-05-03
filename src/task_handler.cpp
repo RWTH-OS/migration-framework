@@ -121,7 +121,10 @@ void Task_handler::load(const YAML::Node &node)
 			throw std::invalid_argument("No type for hypervisor interface in configuration found.");
 		auto type = hypervisor_node["type"].as<std::string>();
 		if (type == "libvirt") {
-			hypervisor = std::make_shared<Libvirt_hypervisor>();
+			std::vector<std::string> nodes;
+			if (hypervisor_node["nodes"])
+				nodes = hypervisor_node["nodes"].as<decltype(nodes)>();
+			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes));
 		} else if (type == "dummy") {
 			if (!hypervisor_node["never-throw"])
 				throw std::invalid_argument("Defective configuration for dummy hypervisor.");

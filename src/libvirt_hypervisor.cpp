@@ -68,9 +68,10 @@ void probe_ssh_connection(virDomainPtr domain)
 //
 
 /// TODO: Use dedicated connect function with error handling.
-Libvirt_hypervisor::Libvirt_hypervisor() :
+Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes) :
 	local_host_conn(virConnectOpen("qemu:///system")),
-	pci_device_handler(std::make_shared<PCI_device_handler>())
+	pci_device_handler(std::make_shared<PCI_device_handler>()),
+	nodes(std::move(nodes))
 {
 	if (!local_host_conn)
 		throw std::runtime_error("Failed to connect to qemu on local host.");
@@ -139,6 +140,24 @@ void check_state(virDomainPtr domain, virDomainState expected_state)
 	if (state != expected_state)
 		throw std::runtime_error("Wrong domain state: " + std::to_string(state));
 }
+
+void check_remote_state(const std::string &name, const std::vector<std::string> &nodes, virDomainState expected_state)
+{
+	for (const auto &node : nodes) {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Check domain state on " + node + ".";
+		std::unique_ptr<virConnect, Deleter_virConnect> conn(
+			virConnectOpen(("qemu+ssh://" + node + "/system").c_str())
+		);
+		try {
+			auto domain = find_by_name(conn.get(), name);
+			check_state(domain.get(), expected_state);
+		} catch (const std::runtime_error &e) {
+			if (e.what() != std::string("Domain not found."))
+				throw;
+		}
+	}
+}
+
 void wait_for_state(virDomainPtr domain, virDomainState expected_state)
 {
 	// TODO: Implement timeout
@@ -192,6 +211,10 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		// Get domain info + check if in shutdown state
 		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
 	}
+	// Check if domain already running on a remote host
+	// TODO: Extract vm_name from XML and make vm_name optional in message.
+	auto name = task.vm_name;
+	check_remote_state(name, nodes, VIR_DOMAIN_SHUTOFF);
 	// Set memory
 	if (task.memory.is_valid()) {
 		// TODO: Add separat max memory option
