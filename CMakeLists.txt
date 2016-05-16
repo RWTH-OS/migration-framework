@@ -58,7 +58,7 @@ list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
 # libssh
 ExternalProject_Add(
 	libssh
-	GIT_REPOSITORY http://git.libssh.org/projects/libssh.git
+	GIT_REPOSITORY git://git.libssh.org/projects/libssh.git
 	GIT_TAG libssh-0.7.2
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
