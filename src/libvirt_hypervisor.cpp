@@ -133,12 +133,21 @@ unsigned char get_domain_state(virDomainPtr domain)
 	return domain_info.state;
 }
 
+struct Domain_state_error :
+	public std::runtime_error
+{
+	explicit Domain_state_error(const std::string &what_arg) :
+		std::runtime_error(what_arg)
+	{
+	}
+};
+
 void check_state(virDomainPtr domain, virDomainState expected_state)
 {
 	auto state = get_domain_state(domain);
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Check domain state.";
 	if (state != expected_state)
-		throw std::runtime_error("Wrong domain state: " + std::to_string(state));
+		throw Domain_state_error("Wrong domain state: " + std::to_string(state));
 }
 
 void check_remote_state(const std::string &name, const std::vector<std::string> &nodes, virDomainState expected_state)
@@ -151,6 +160,8 @@ void check_remote_state(const std::string &name, const std::vector<std::string> 
 		try {
 			auto domain = find_by_name(conn.get(), name);
 			check_state(domain.get(), expected_state);
+		} catch (const Domain_state_error &e) {
+			throw std::runtime_error("Domain already running on " + node);
 		} catch (const std::runtime_error &e) {
 			if (e.what() != std::string("Domain not found."))
 				throw;
@@ -270,8 +281,10 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	bool live_migration = task.live_migration;
 	bool rdma_migration = task.rdma_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
-	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "live-migration=" << task.live_migration;
-	FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "rdma-migration=" << task.rdma_migration;
+	//FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "live-migration=" << task.live_migration;
+	//FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "rdma-migration=" << task.rdma_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << task.live_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << task.rdma_migration;
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
 		find_by_name(local_host_conn, task.vm_name)

@@ -18,7 +18,7 @@
 #include <algorithm>
 
 FASTLIB_LOG_INIT(pcidev_handler_log, "PCI_device_handler")
-FASTLIB_LOG_SET_LEVEL_GLOBAL(lpcidev_handler_log, trace);
+FASTLIB_LOG_SET_LEVEL_GLOBAL(pcidev_handler_log, trace);
 
 // Some deleter to be used with smart pointers.
 

@@ -74,7 +74,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 				hypervisor->migrate(*migrate_task, time_measurement);
 			}
 		} catch (const std::exception &e) {
-			FASTLIB_LOG(migfra_task_log, warning) << "Exception in task: " << e.what();
+			FASTLIB_LOG(migfra_task_log, warn) << "Exception in task: " << e.what();
 			return Result(task->vm_name, "error", time_measurement, e.what());
 		}
 		time_measurement.tock("overall");
@@ -88,7 +88,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	if (task_cont.tasks.empty()) {
-		FASTLIB_LOG(migfra_task_log, warning) << "Empty task container executed.";
+		FASTLIB_LOG(migfra_task_log, warn) << "Empty task container executed.";
 		return;
 	}
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
