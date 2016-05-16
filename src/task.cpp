@@ -8,7 +8,7 @@
 
 #include "task.hpp"
 
-#include "hooks.hpp"
+#include "pscom_handler.hpp"
 
 #include <fast-lib/message/migfra/result.hpp>
 #include <fast-lib/log.hpp>
@@ -69,16 +69,12 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 			} else if (migrate_task) {
 				// Suspend pscom (resume in destructor)
 				// TODO: pass whole migrate task
-				auto procs = migrate_task->pscom_hook_procs.is_valid() ? migrate_task->pscom_hook_procs.get() : 0;
-				Suspend_pscom pscom_hook(migrate_task->vm_name,
-						procs,
-						comm,
-						time_measurement);
+				Pscom_handler pscom_handler(*migrate_task, comm, time_measurement);
 				// Start migration
 				hypervisor->migrate(*migrate_task, time_measurement);
 			}
 		} catch (const std::exception &e) {
-			FASTLIB_LOG(migfra_task_log, warning) << "Exception in task: " << e.what();
+			FASTLIB_LOG(migfra_task_log, warn) << "Exception in task: " << e.what();
 			return Result(task->vm_name, "error", time_measurement, e.what());
 		}
 		time_measurement.tock("overall");
@@ -92,7 +88,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
 	if (task_cont.tasks.empty()) {
-		FASTLIB_LOG(migfra_task_log, warning) << "Empty task container executed.";
+		FASTLIB_LOG(migfra_task_log, warn) << "Empty task container executed.";
 		return;
 	}
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!

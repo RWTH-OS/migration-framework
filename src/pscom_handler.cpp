@@ -1,20 +1,22 @@
-#include "hooks.hpp"
+#include "pscom_handler.hpp"
 
 #include <stdexcept>
+#include <regex>
 
-Suspend_pscom::Suspend_pscom(const std::string &vm_name,
-			     unsigned int messages_expected,
+std::string Pscom_handler::request_topic_template = "fast/pscom/<vm_name>/any_proc/request";
+std::string Pscom_handler::response_topic_template = "fast/pscom/<vm_name>/+/response";
+int Pscom_handler::qos = 0;
+
+Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 			     std::shared_ptr<fast::Communicator> comm,
-			     Time_measurement &time_measurement) :
-	vm_name(vm_name),
-	messages_expected(messages_expected),
+			     fast::msg::migfra::Time_measurement &time_measurement) :
+	vm_name(task.vm_name),
+	messages_expected(task.pscom_hook_procs.is_valid() ? task.pscom_hook_procs.get() : 0),
 	answers(0),
-	qos(0),
-	time_measurement(time_measurement)
+	time_measurement(time_measurement),
+	request_topic(std::regex_replace(request_topic_template, std::regex(R"((<vm_name>))"), vm_name)),
+	response_topic(std::regex_replace(request_topic_template, std::regex(R"((<vm_name>))"), vm_name))
 {
-	request_topic = "fast/pscom/" + vm_name + "/any_proc/request";
-	response_topic = "fast/pscom/" + vm_name + "/+/response";
-
 	if (messages_expected > 0) {
 		if (!(this->comm = std::dynamic_pointer_cast<fast::MQTT_communicator>(comm)))
 			throw std::runtime_error("Suspending pscom procs is not available without MQTT_communicator.");
@@ -25,7 +27,7 @@ Suspend_pscom::Suspend_pscom(const std::string &vm_name,
 	}
 }
 
-Suspend_pscom::~Suspend_pscom()
+Pscom_handler::~Pscom_handler()
 {
 	if (messages_expected > 0) {
 		try {
@@ -44,7 +46,22 @@ Suspend_pscom::~Suspend_pscom()
 	}
 }
 
-void Suspend_pscom::suspend()
+void Pscom_handler::set_request_topic_template(std::string request)
+{
+	Pscom_handler::request_topic_template = std::move(request);
+}
+
+void Pscom_handler::set_response_topic_template(std::string response)
+{
+	Pscom_handler::response_topic_template = std::move(response);
+}
+
+void Pscom_handler::set_qos(int qos)
+{
+	Pscom_handler::qos = qos;
+}
+
+void Pscom_handler::suspend()
 {
 	if (messages_expected > 0) {
 		time_measurement.tick("pscom-suspend");
@@ -58,7 +75,7 @@ void Suspend_pscom::suspend()
 	}
 }
 
-void Suspend_pscom::resume()
+void Pscom_handler::resume()
 {
 	// only try to resume if pscom is suspended
 	if (answers == messages_expected && messages_expected > 0) {

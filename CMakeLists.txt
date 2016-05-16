@@ -13,6 +13,11 @@ cmake_minimum_required(VERSION 2.8)
 project(migration-framework)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
+set(ENABLE_LOGGING ON CACHE BOOL "Enable logging.")
+if(ENABLE_LOGGING)
+	add_definitions(-DFASTLIB_ENABLE_LOGGING)
+endif()
+
 #### Set compiler flags
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" CXX11_SUPPORTED)
@@ -41,7 +46,7 @@ ExternalProject_Add(
 	fastlib
 	GIT_REPOSITORY git@github.com:fast-project/fast-lib.git
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
-	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=ON -DBUILD_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=${ENABLE_LOGGING} -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
 ExternalProject_Get_Property(fastlib install_dir)
 include_directories("${install_dir}/include")
@@ -81,12 +86,12 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/dummy_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
-	${PROJECT_SOURCE_DIR}/src/hooks.cpp
+	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
-	${PROJECT_SOURCE_DIR}/src/hooks.cpp
+	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 )
 

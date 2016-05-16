@@ -102,12 +102,11 @@ public:
 	~Migrate_devices_guard();
 
 	void set_destination_domain(virDomainPtr dest_domain);
-	void reattach();
 private:
+	void reattach();
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	virDomainPtr domain;
 	std::unordered_map<PCI_id, size_t> detached_types_counts;
-	bool reattached;
 	Time_measurement &time_measurement;
 };
 

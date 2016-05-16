@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <vector>
+#include <string>
 
 class PCI_device_handler;
 
@@ -34,8 +35,9 @@ public:
 	 * \brief Constructor for Libvirt_hypervisor.
 	 *
 	 * Establishes an connection to qemu on the local host.
+	 * \param nodes Defines the nodes to look for already running virtual machines.
 	 */
-	Libvirt_hypervisor();
+	Libvirt_hypervisor(std::vector<std::string> nodes);
 	/**
 	 * \brief Destructor for Libvirt_hypervisor.
 	 *
@@ -74,6 +76,7 @@ public:
 private:
 	virConnectPtr local_host_conn;	
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
+	std::vector<std::string> nodes;
 };
 
 #endif

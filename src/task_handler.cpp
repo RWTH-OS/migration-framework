@@ -11,6 +11,7 @@
 #include "libvirt_hypervisor.hpp"
 #include "dummy_hypervisor.hpp"
 #include "task.hpp"
+#include "pscom_handler.hpp"
 
 #include <fast-lib/mqtt_communicator.hpp>
 #include <mosquittopp.h>
@@ -120,7 +121,10 @@ void Task_handler::load(const YAML::Node &node)
 			throw std::invalid_argument("No type for hypervisor interface in configuration found.");
 		auto type = hypervisor_node["type"].as<std::string>();
 		if (type == "libvirt") {
-			hypervisor = std::make_shared<Libvirt_hypervisor>();
+			std::vector<std::string> nodes;
+			if (hypervisor_node["nodes"])
+				nodes = hypervisor_node["nodes"].as<decltype(nodes)>();
+			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes));
 		} else if (type == "dummy") {
 			if (!hypervisor_node["never-throw"])
 				throw std::invalid_argument("Defective configuration for dummy hypervisor.");
@@ -128,6 +132,15 @@ void Task_handler::load(const YAML::Node &node)
 		} else {
 			throw std::invalid_argument("Unknown communcation type in configuration found");
 		}
+	}
+	if (node["pscom-handler"]) {
+		auto pscom_node = node["pscom-handler"];
+		if (pscom_node["request-topic"])
+			Pscom_handler::set_request_topic_template(pscom_node["request-topic"].as<std::string>());
+		if (pscom_node["response-topic"])
+			Pscom_handler::set_response_topic_template(pscom_node["response-topic"].as<std::string>());
+		if (pscom_node["qos"])
+			Pscom_handler::set_qos(pscom_node["qos"].as<int>());
 	}
 }
 
