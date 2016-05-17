@@ -11,8 +11,6 @@
 
 #include "hypervisor.hpp"
 
-#include <libvirt/libvirt.h>
-
 #include <memory>
 #include <vector>
 #include <string>
@@ -37,13 +35,7 @@ public:
 	 * Establishes an connection to qemu on the local host.
 	 * \param nodes Defines the nodes to look for already running virtual machines.
 	 */
-	Libvirt_hypervisor(std::vector<std::string> nodes);
-	/**
-	 * \brief Destructor for Libvirt_hypervisor.
-	 *
-	 * Disconnects from qemu.
-	 */
-	~Libvirt_hypervisor();
+	Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver);
 	/**
 	 * \brief Method to start a virtual machine.
 	 *
@@ -74,9 +66,9 @@ public:
 	 */
 	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement);
 private:
-	virConnectPtr local_host_conn;	
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;
+	std::string default_driver;
 };
 
 #endif
