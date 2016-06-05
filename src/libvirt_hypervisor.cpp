@@ -275,7 +275,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
 	// Destroy or shutdown domain
-	if (task.force) {
+	if (task.force.is_valid()) {
 		if (virDomainDestroy(domain.get()) == -1)
 			throw std::runtime_error("Error destroying domain.");
 	} else {
