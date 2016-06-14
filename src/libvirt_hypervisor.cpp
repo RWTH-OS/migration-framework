@@ -203,6 +203,56 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus)
 				+ ".");
 }
+// Libvirt sometimes returns a dynamically allocated cstring.
+// As we prefer std::string this function converts and frees.
+std::string convert_and_free_cstr(char *cstr)
+{
+	std::string str;
+	if (cstr) {
+		str.assign(cstr);
+		free(cstr);
+	}
+	return str;
+}
+
+// TODO: Implement deleter for virDomainSnapshotPtr
+void snapshot_migration(const std::string &local_domain_name, const std::string &remote_domain_name, const std::string &remote_host)
+{
+	// Get domains	
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	auto local_conn = connect("", driver);
+	auto remote_conn = connect("", driver, "ssh");
+	auto local_domain = find_by_name(local_conn.get(), local_domain_name);
+	auto remote_domain = find_by_name(remote_conn.get(), remote_domain_name);
+	// Check states TODO: Implement
+	// Compare size TODO: Replace with real implementation
+	auto &name1 = local_domain_name;
+	auto &name2 = remote_domain_name;
+	auto &conn1 = local_conn;
+	auto &conn2 = remote_conn;
+	auto &domain1 = local_domain;
+	auto &domain2 = remote_domain;
+	// Pause vm1 TODO: move to function
+	virDomainSuspend(domain1.get());
+	// Take snapshot of vm1 TODO: move to function
+	auto snapshot = virDomainSnapshotCreateXML(domain1.get(), "", nullptr);
+	// destroy vm1 TODO: move to function
+	virDomainDestroy(domain1.get());
+	// Migrate vm2 TODO: handle flags and migrateuri and check success
+	std::unique_ptr<virDomain, Deleter_virDomain> dest_domain2(
+		virDomainMigrate(domain2.get(), conn1.get(), nullptr, 0, nullptr, 0)
+	);
+	// Get snapshotted domain on dest
+	auto dest_domain1 = find_by_name(conn2.get(), name1);
+	// Redefine snapshot on remote
+	auto xml = convert_and_free_cstr(virDomainSnapshotGetXMLDesc(snapshot, VIR_DOMAIN_XML_MIGRATABLE));
+	auto dest_snapshot = virDomainSnapshotCreateXML(dest_domain1, xml.c_str(), VIR_DOMAIN_SNAPSHOT_CREATE_REDEFINE);
+	// Remove snapshot from src
+	virDomainSnapshotDelete(snapshot)
+	// Revert to snapshot
+	virDomainSnapshotRevert(dest_snapshot, VIR_DOMAIN_SNAPSHOT_REVERT_RUNNING);
+
+}
 
 //
 // Libvirt_hypervisor implementation
