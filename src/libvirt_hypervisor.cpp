@@ -208,10 +208,11 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 // Libvirt_hypervisor implementation
 //
 
-Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver) :
+Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport) :
 	pci_device_handler(std::make_shared<PCI_device_handler>()),
 	nodes(std::move(nodes)),
-	default_driver(std::move(default_driver))
+	default_driver(std::move(default_driver)),
+	default_transport(std::move(default_transport))
 {
 }
 
@@ -219,7 +220,8 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 {
 	(void) time_measurement;
 	// Connect to libvirt to libvirt
-	auto conn = connect("", task.driver.is_valid() ? task.driver.get() : default_driver);
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	auto conn = connect("", driver);
 	// Get domain
 	std::unique_ptr<virDomain, Deleter_virDomain> domain;
 	if (task.xml.is_valid()) {
@@ -265,7 +267,8 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 {
 	(void) time_measurement;
 	// Connect to libvirt to libvirt
-	auto conn = connect("", task.driver.is_valid() ? task.driver.get() : default_driver);
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	auto conn = connect("", driver);
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
 		find_by_name(conn.get(), task.vm_name)
@@ -297,7 +300,9 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << task.live_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << task.rdma_migration;
 	// Connect to libvirt to libvirt
-	auto conn = connect("", task.driver.is_valid() ? task.driver.get() : default_driver);
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "driver=" << driver;
+	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
 	// Check if domain is in running state
@@ -306,7 +311,9 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
 	Migrate_devices_guard dev_guard(pci_device_handler, domain.get(), time_measurement);
 	// Connect to destination
-	auto dest_connection = connect(dest_hostname, "qemu", "ssh");
+	auto transport = task.transport.is_valid() ? task.transport.get() : default_transport;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "transport=" << transport;
+	auto dest_connection = connect(dest_hostname, driver, transport);
 	// Set migration flags
 	unsigned long flags = 0;
 	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;

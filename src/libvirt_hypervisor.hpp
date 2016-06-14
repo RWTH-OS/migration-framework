@@ -35,7 +35,7 @@ public:
 	 * Establishes an connection to qemu on the local host.
 	 * \param nodes Defines the nodes to look for already running virtual machines.
 	 */
-	Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver);
+	Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport);
 	/**
 	 * \brief Method to start a virtual machine.
 	 *
@@ -69,6 +69,7 @@ private:
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;
 	std::string default_driver;
+	std::string default_transport;
 };
 
 #endif
