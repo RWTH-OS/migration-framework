@@ -25,7 +25,9 @@ using namespace fast::msg::migfra;
 FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
 
+//
 // Some deleter to be used with smart pointers.
+//
 
 struct Deleter_virConnect
 {
@@ -42,6 +44,10 @@ struct Deleter_virDomain
 		virDomainFree(ptr);
 	}
 };
+
+//
+// Helper functions
+//
 
 void probe_ssh_connection(virDomainPtr domain)
 {
@@ -63,25 +69,17 @@ void probe_ssh_connection(virDomainPtr domain)
 	} while (!success);
 }
 
-//
-// Libvirt_hypervisor implementation
-//
-
-/// TODO: Use dedicated connect function with error handling.
-Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes) :
-	local_host_conn(virConnectOpen("qemu:///system")),
-	pci_device_handler(std::make_shared<PCI_device_handler>()),
-	nodes(std::move(nodes))
+std::unique_ptr<virConnect, Deleter_virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
 {
-	if (!local_host_conn)
-		throw std::runtime_error("Failed to connect to qemu on local host.");
-}
-
-Libvirt_hypervisor::~Libvirt_hypervisor()
-{
-	if (virConnectClose(local_host_conn)) {
-		FASTLIB_LOG(libvirt_hyp_log, trace) << "Warning: Some qemu connections have not been closed after destruction of hypervisor wrapper!";
-	}
+	std::string plus_transport = (transport != "") ? ("+" + transport) : "";
+	std::string uri = driver + plus_transport + "://" + host + "/system";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to " + uri;
+	std::unique_ptr<virConnect, Deleter_virConnect> conn(
+			virConnectOpen(uri.c_str())
+	);
+	if (!conn)
+		throw std::runtime_error("Failed to connect to libvirt with uri: " + uri);
+	return conn;
 }
 
 std::unique_ptr<virDomain, Deleter_virDomain> define_from_xml(virConnectPtr conn, const std::string &xml)
@@ -154,9 +152,7 @@ void check_remote_state(const std::string &name, const std::vector<std::string> 
 {
 	for (const auto &node : nodes) {
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Check domain state on " + node + ".";
-		std::unique_ptr<virConnect, Deleter_virConnect> conn(
-			virConnectOpen(("qemu+ssh://" + node + "/system").c_str())
-		);
+		auto conn = connect(node, "qemu", "ssh");
 		try {
 			auto domain = find_by_name(conn.get(), name);
 			check_state(domain.get(), expected_state);
@@ -208,23 +204,40 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 				+ ".");
 }
 
+//
+// Libvirt_hypervisor implementation
+//
+
+Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport) :
+	pci_device_handler(std::make_shared<PCI_device_handler>()),
+	nodes(std::move(nodes)),
+	default_driver(std::move(default_driver)),
+	default_transport(std::move(default_transport))
+{
+}
+
 void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measurement)
 {
 	(void) time_measurement;
+	// Connect to libvirt to libvirt
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	auto conn = connect("", driver);
 	// Get domain
 	std::unique_ptr<virDomain, Deleter_virDomain> domain;
 	if (task.xml.is_valid()) {
 		// Define domain from XML
-		domain = define_from_xml(local_host_conn, task.xml);
+		domain = define_from_xml(conn.get(), task.xml);
 	} else {
 		// Find existing domain
-		domain = find_by_name(local_host_conn, task.vm_name);
+		domain = find_by_name(conn.get(), task.vm_name);
 		// Get domain info + check if in shutdown state
 		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
 	}
 	// Check if domain already running on a remote host
-	// TODO: Extract vm_name from XML and make vm_name optional in message.
-	auto name = task.vm_name;
+	auto name_cstr = virDomainGetName(domain.get());
+	if (!name_cstr)
+		throw std::runtime_error("Cannot get domain name.");
+	auto name = std::string(name_cstr);
 	check_remote_state(name, nodes, VIR_DOMAIN_SHUTOFF);
 	// Set memory
 	if (task.memory.is_valid()) {
@@ -253,16 +266,19 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measurement)
 {
 	(void) time_measurement;
+	// Connect to libvirt to libvirt
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	auto conn = connect("", driver);
 	// Get domain by name
 	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-		find_by_name(local_host_conn, task.vm_name)
+		find_by_name(conn.get(), task.vm_name)
 	);
 	// Get domain info + check if in running state
 	check_state(domain.get(), VIR_DOMAIN_RUNNING);
 	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
 	// Destroy or shutdown domain
-	if (task.force) {
+	if (task.force.is_valid()) {
 		if (virDomainDestroy(domain.get()) == -1)
 			throw std::runtime_error("Error destroying domain.");
 	} else {
@@ -281,27 +297,23 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	bool live_migration = task.live_migration;
 	bool rdma_migration = task.rdma_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
-	//FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "live-migration=" << task.live_migration;
-	//FASTLIB_LOG(libvirt_hyp_log, trace) << std::boolalpha << "rdma-migration=" << task.rdma_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << task.live_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << task.rdma_migration;
+	// Connect to libvirt to libvirt
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "driver=" << driver;
+	auto conn = connect("", driver);
 	// Get domain by name
-	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-		find_by_name(local_host_conn, task.vm_name)
-	);
-	// Get domain info + check if in running state
+	auto domain = find_by_name(conn.get(), task.vm_name);
+	// Check if domain is in running state
 	check_state(domain.get(), VIR_DOMAIN_RUNNING);
 	// Guard migration of PCI devices.
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
 	Migrate_devices_guard dev_guard(pci_device_handler, domain.get(), time_measurement);
 	// Connect to destination
-	// TODO: Move to dedicated function
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to destination.";
-	std::unique_ptr<virConnect, Deleter_virConnect> dest_connection(
-		virConnectOpen(("qemu+ssh://" + dest_hostname + "/system").c_str())
-	);
-	if (!dest_connection)
-		throw std::runtime_error("Cannot establish connection to " + dest_hostname);
+	auto transport = task.transport.is_valid() ? task.transport.get() : default_transport;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "transport=" << transport;
+	auto dest_connection = connect(dest_hostname, driver, transport);
 	// Set migration flags
 	unsigned long flags = 0;
 	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;

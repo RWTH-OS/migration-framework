@@ -124,7 +124,13 @@ void Task_handler::load(const YAML::Node &node)
 			std::vector<std::string> nodes;
 			if (hypervisor_node["nodes"])
 				nodes = hypervisor_node["nodes"].as<decltype(nodes)>();
-			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes));
+			std::string default_driver = "qemu";
+			if (hypervisor_node["driver"])
+				default_driver = hypervisor_node["driver"].as<decltype(default_driver)>();
+			std::string default_transport = "ssh";
+			if (hypervisor_node["transport"])
+				default_transport = hypervisor_node["transport"].as<decltype(default_transport)>();
+			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes), default_driver, default_transport);
 		} else if (type == "dummy") {
 			if (!hypervisor_node["never-throw"])
 				throw std::invalid_argument("Defective configuration for dummy hypervisor.");
