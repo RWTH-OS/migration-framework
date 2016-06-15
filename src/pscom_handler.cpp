@@ -27,7 +27,7 @@ Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 	}
 }
 
-Pscom_handler::~Pscom_handler()
+Pscom_handler::~Pscom_handler() noexcept(false)
 {
 	if (messages_expected > 0) {
 		try {
