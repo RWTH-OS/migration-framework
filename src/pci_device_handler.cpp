@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
+#include <random>
 
 FASTLIB_LOG_INIT(pcidev_handler_log, "PCI_device_handler")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(pcidev_handler_log, trace);
@@ -412,7 +413,7 @@ Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler>
 	time_measurement.tock("detach-pci-devs");
 }
 
-Migrate_devices_guard::~Migrate_devices_guard()
+Migrate_devices_guard::~Migrate_devices_guard() noexcept(false)
 {
 	try {
 		reattach();

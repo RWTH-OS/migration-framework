@@ -99,7 +99,7 @@ class Migrate_devices_guard
 {
 public:
 	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, virDomainPtr domain, Time_measurement &time_measurement);
-	~Migrate_devices_guard();
+	~Migrate_devices_guard() noexcept(false);
 
 	void set_destination_domain(virDomainPtr dest_domain);
 private:

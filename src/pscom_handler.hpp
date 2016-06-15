@@ -23,7 +23,7 @@ public:
 	Pscom_handler(const fast::msg::migfra::Migrate &task,
 		      std::shared_ptr<fast::Communicator> comm,
 		      fast::msg::migfra::Time_measurement &time_measurement);
-	~Pscom_handler();
+	~Pscom_handler() noexcept(false);
 
 	/**
 	 * \brief This static function may be used to alter the topic for requests.
