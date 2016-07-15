@@ -227,11 +227,13 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	if (task.xml.is_valid()) {
 		// Define domain from XML
 		domain = define_from_xml(conn.get(), task.xml);
-	} else {
+	} else if (task.vm_name.is_valid()) {
 		// Find existing domain
 		domain = find_by_name(conn.get(), task.vm_name);
 		// Get domain info + check if in shutdown state
 		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
+	} else {
+		throw std::runtime_error("Neither vm-name nor xml is specified in start task.");
 	}
 	// Check if domain already running on a remote host
 	auto name_cstr = virDomainGetName(domain.get());
@@ -294,11 +296,11 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
 	const std::string &dest_hostname = task.dest_hostname;
-	bool live_migration = task.live_migration;
+	bool live_migration = task.migration_type == "live";
 	bool rdma_migration = task.rdma_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << task.live_migration;
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << task.rdma_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << live_migration;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << rdma_migration;
 	// Connect to libvirt to libvirt
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "driver=" << driver;
