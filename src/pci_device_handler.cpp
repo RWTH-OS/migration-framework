@@ -402,14 +402,14 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 //
 
 Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler,
-		virDomainPtr domain, Time_measurement &time_measurement) :
+		std::shared_ptr<virDomain> domain, Time_measurement &time_measurement) :
 	pci_device_handler(pci_device_handler),
 	domain(domain),
 	time_measurement(time_measurement)
 {
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Detach all devices.";
 	time_measurement.tick("detach-pci-devs");
-	detached_types_counts = pci_device_handler->detach(domain);
+	detached_types_counts = pci_device_handler->detach(domain.get());
 	time_measurement.tock("detach-pci-devs");
 }
 
@@ -426,7 +426,7 @@ Migrate_devices_guard::~Migrate_devices_guard() noexcept(false)
 	}
 }
 
-void Migrate_devices_guard::set_destination_domain(virDomainPtr dest_domain)
+void Migrate_devices_guard::set_destination_domain(std::shared_ptr<virDomain> dest_domain)
 {
 	// override domain to reattach devices on
 	domain = dest_domain;
@@ -438,7 +438,7 @@ void Migrate_devices_guard::reattach()
 	for (auto &type_count : detached_types_counts) {
 		for (;type_count.second != 0; --type_count.second) {
 			FASTLIB_LOG(pcidev_handler_log, trace) << "Reattach device of type " << type_count.first.str();
-			pci_device_handler->attach(domain, type_count.first);
+			pci_device_handler->attach(domain.get(), type_count.first);
 		}
 	}
 	time_measurement.tock("reattach-pci-devs");
