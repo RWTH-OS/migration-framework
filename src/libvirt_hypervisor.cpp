@@ -9,6 +9,7 @@
 #include "libvirt_hypervisor.hpp"
 
 #include "pci_device_handler.hpp"
+#include "libvirt_utility.hpp"
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
@@ -24,26 +25,6 @@ using namespace fast::msg::migfra;
 
 FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
-
-//
-// Some deleter to be used with smart pointers.
-//
-
-struct Deleter_virConnect
-{
-	void operator()(virConnectPtr ptr) const
-	{
-		virConnectClose(ptr);
-	}
-};
-
-struct Deleter_virDomain
-{
-	void operator()(virDomainPtr ptr) const
-	{
-		virDomainFree(ptr);
-	}
-};
 
 //
 // Helper functions
@@ -69,46 +50,50 @@ void probe_ssh_connection(virDomainPtr domain)
 	} while (!success);
 }
 
-std::unique_ptr<virConnect, Deleter_virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
+std::shared_ptr<virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
 {
 	std::string plus_transport = (transport != "") ? ("+" + transport) : "";
 	std::string uri = driver + plus_transport + "://" + host + "/system";
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to " + uri;
-	std::unique_ptr<virConnect, Deleter_virConnect> conn(
-			virConnectOpen(uri.c_str())
+	std::shared_ptr<virConnect> conn(
+			virConnectOpen(uri.c_str()),
+			Deleter_virConnect()
 	);
 	if (!conn)
 		throw std::runtime_error("Failed to connect to libvirt with uri: " + uri);
 	return conn;
 }
 
-std::unique_ptr<virDomain, Deleter_virDomain> define_from_xml(virConnectPtr conn, const std::string &xml)
+std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string &xml)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Define persistant domain from xml";
-	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-			virDomainDefineXML(conn, xml.c_str())
+	std::shared_ptr<virDomain> domain(
+			virDomainDefineXML(conn, xml.c_str()),
+			Deleter_virDomain()
 	);
 	if (!domain)
 		throw std::runtime_error("Error defining domain from xml.");
 	return std::move(domain);
 }
 
-std::unique_ptr<virDomain, Deleter_virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
+std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain from xml";
-	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-			virDomainCreateXML(conn, xml.c_str(), VIR_DOMAIN_NONE)
+	std::shared_ptr<virDomain> domain(
+			virDomainCreateXML(conn, xml.c_str(), VIR_DOMAIN_NONE),
+			Deleter_virDomain()
 	);
 	if (!domain)
 		throw std::runtime_error("Error creating domain from xml.");
 	return std::move(domain);
 }
 
-std::unique_ptr<virDomain, Deleter_virDomain> find_by_name(virConnectPtr conn, const std::string &name)
+std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &name)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
-	std::unique_ptr<virDomain, Deleter_virDomain> domain(
-		virDomainLookupByName(conn, name.c_str())
+	std::shared_ptr<virDomain> domain(
+		virDomainLookupByName(conn, name.c_str()),
+		Deleter_virDomain()
 	);
 	if (!domain)
 		throw std::runtime_error("Domain not found.");
@@ -223,7 +208,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	auto conn = connect("", driver);
 	// Get domain
-	std::unique_ptr<virDomain, Deleter_virDomain> domain;
+	std::shared_ptr<virDomain> domain;
 	if (task.xml.is_valid()) {
 		// Define domain from XML
 		domain = define_from_xml(conn.get(), task.xml);
@@ -272,7 +257,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	auto conn = connect("", driver);
 	// Get domain by name
-	std::unique_ptr<virDomain, Deleter_virDomain> domain(
+	std::shared_ptr<virDomain> domain(
 		find_by_name(conn.get(), task.vm_name)
 	);
 	// Get domain info + check if in running state
@@ -296,9 +281,11 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
 	const std::string &dest_hostname = task.dest_hostname;
-	bool live_migration = task.migration_type == "live";
-	bool rdma_migration = task.rdma_migration;
+	auto migration_type = task.migration_type.is_valid() ? task.migration_type.get() : "warm";
+	bool live_migration = migration_type == "live";
+	bool rdma_migration = task.rdma_migration.is_valid() ? task.rdma_migration.get() : false;;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "migration-type=" << migration_type;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << live_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << rdma_migration;
 	// Connect to libvirt to libvirt
@@ -311,7 +298,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	check_state(domain.get(), VIR_DOMAIN_RUNNING);
 	// Guard migration of PCI devices.
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
-	Migrate_devices_guard dev_guard(pci_device_handler, domain.get(), time_measurement);
+	Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
 	// Connect to destination
 	auto transport = task.transport.is_valid() ? task.transport.get() : default_transport;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "transport=" << transport;
@@ -325,13 +312,14 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	// Migrate domain
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
 	time_measurement.tick("migrate");
-	std::unique_ptr<virDomain, Deleter_virDomain> dest_domain(
-		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, rdma_migration ? migrate_uri.c_str() : nullptr, 0)
+	std::shared_ptr<virDomain> dest_domain(
+		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, rdma_migration ? migrate_uri.c_str() : nullptr, 0),
+		Deleter_virDomain()
 	);
 	time_measurement.tock("migrate");
 	if (!dest_domain)
 		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
 	// Set destination domain for guards
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
-	dev_guard.set_destination_domain(dest_domain.get());
+	dev_guard.set_destination_domain(dest_domain);
 }
