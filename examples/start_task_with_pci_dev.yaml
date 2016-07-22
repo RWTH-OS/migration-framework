@@ -1,9 +1,7 @@
 ---
 task: start vm
 vm-configurations: 
-  - vm-name: centos7113
-    vcpus: 1
-    memory: 524288
+  - vm-name: centos7114
     pci-ids: 
       - vendor: 0x15b3
         device: 0x1004
