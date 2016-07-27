@@ -1,7 +1,6 @@
 ---
 task: start vm
+id: 1234a
 vm-configurations: 
-  - vm-name: centos7113
-    vcpus: 1
-    memory: 524288
+  - vm-name: centos7114
 ...

@@ -57,28 +57,34 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 	auto func = [task, hypervisor, comm]
 	{
 		fast::msg::migfra::Time_measurement time_measurement(task->time_measurement.is_valid() ? task->time_measurement.get() : false);
+		std::string vm_name;
+		auto start_task = std::dynamic_pointer_cast<Start>(task);
+		auto stop_task = std::dynamic_pointer_cast<Stop>(task);
+		auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
 		try {
 			time_measurement.tick("overall");
-			auto start_task = std::dynamic_pointer_cast<Start>(task);
-			auto stop_task = std::dynamic_pointer_cast<Stop>(task);
-			auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
 			if (start_task) {
+				if (start_task->vm_name.is_valid())
+					vm_name = start_task->vm_name.get();
+				else if (start_task->xml.is_valid())
+					vm_name = start_task->xml.get();
 				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
+				vm_name = stop_task->vm_name;
 				hypervisor->stop(*stop_task, time_measurement);
 			} else if (migrate_task) {
+				vm_name = migrate_task->vm_name;
 				// Suspend pscom (resume in destructor)
-				// TODO: pass whole migrate task
 				Pscom_handler pscom_handler(*migrate_task, comm, time_measurement);
 				// Start migration
 				hypervisor->migrate(*migrate_task, time_measurement);
 			}
 		} catch (const std::exception &e) {
 			FASTLIB_LOG(migfra_task_log, warn) << "Exception in task: " << e.what();
-			return Result(task->vm_name, "error", time_measurement, e.what());
+			return Result(vm_name, "error", time_measurement, e.what());
 		}
 		time_measurement.tock("overall");
-		return Result(task->vm_name, "success", time_measurement);
+		return Result(vm_name, "success", time_measurement);
 	};
 	bool concurrent_execution = !task->concurrent_execution.is_valid() || task->concurrent_execution.get();
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
