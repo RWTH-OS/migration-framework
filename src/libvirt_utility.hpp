@@ -3,6 +3,8 @@
 
 #include <libvirt/libvirt.h>
 
+#include <string>
+
 //
 // Some deleter to be used with smart pointers.
 //
@@ -22,5 +24,17 @@ struct Deleter_virDomain
 		virDomainFree(ptr);
 	}
 };
+
+struct Deleter_virDomainSnapshot
+{
+	void operator()(virDomainSnapshotPtr ptr) const
+	{
+		virDomainSnapshotFree(ptr);
+	}
+};
+
+// Libvirt sometimes returns a dynamically allocated cstring.
+// As we prefer std::string this function converts and frees.
+std::string convert_and_free_cstr(char *cstr);
 
 #endif

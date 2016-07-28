@@ -8,6 +8,8 @@
 
 #include "pci_device_handler.hpp"
 
+#include "libvirt_utility.hpp"
+
 #include <fast-lib/log.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 //#include <boost/regex.hpp>
@@ -30,19 +32,6 @@ struct Deleter_virNodeDevice
 		virNodeDeviceFree(ptr);
 	}
 };
-
-// Libvirt sometimes returns a dynamically allocated cstring.
-// As we prefer std::string this function converts and frees.
-std::string convert_and_free_cstr(char *cstr)
-{
-	std::string str;
-	if (cstr) {
-		str.assign(cstr);
-		free(cstr);
-	}
-	return str;
-
-}
 
 // Wraps ugly passing of C style array of raw pointers to returning vector of smart pointers.
 std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node_devices_wrapper(virConnectPtr conn, unsigned int flags)
