@@ -2,8 +2,9 @@
 task: migrate vm
 vm-name: centos7113
 destination: pandora2
+time-measurement: true
 parameter:
   migration-type: warm
-  rdma-migration: false
+  rdma-migration: true
   swap-with: centos7114
 ...

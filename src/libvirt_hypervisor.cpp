@@ -414,28 +414,29 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
 		// Compare size and swap if necessary
 		sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
-		// Guard migration of PCI devices. TODO: Fix time_measurement.
+		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
-		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement);
-		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement);
+		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement, name1);
+		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement, name2);
 		// Suspend vm1
-		time_measurement.tick("suspend-vm1");
+		time_measurement.tick("downtime-" + name1);
+		time_measurement.tick("suspend-" + name1);
 		suspend(domain1.get());
 		// Take snapshot of vm1.
 		auto snapshot = create_snapshot(domain1.get());
 		// destroy vm1
 		destroy(domain1.get());
-		time_measurement.tock("suspend-vm1");
+		time_measurement.tock("suspend-" + name1);
 		// Create migrateuri
 		std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
 		// Migrate vm2
-		time_measurement.tick("migrate-vm2");
+		time_measurement.tick("migrate-" + name2);
 		auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri);
-		time_measurement.tock("migrate-vm2");
+		time_measurement.tock("migrate-" + name2);
 		// Set destination domain for guard
 		dev_guard2.set_destination_domain(dest_domain2);
 		// Get snapshotted domain on dest
-		time_measurement.tick("resume-vm1");
+		time_measurement.tick("resume-" + name1);
 		auto dest_domain1 = find_by_name(conn2.get(), name1);
 		// Redefine snapshot on remote
 		auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
@@ -443,7 +444,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		delete_snapshot(snapshot.get());
 		// Revert to snapshot
 		revert_to_snapshot(dest_snapshot.get());
-		time_measurement.tock("resume-vm1");
+		time_measurement.tock("resume-" + name1);
+		time_measurement.tock("downtime-" + name1);
 		// Remove snapshot from destination
 		delete_snapshot(dest_snapshot.get());
 		// Set destination domain for guard
