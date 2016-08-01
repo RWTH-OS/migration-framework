@@ -15,6 +15,7 @@
 #include "utility.hpp"
 
 #include <fast-lib/mqtt_communicator.hpp>
+#include <fast-lib/log.hpp>
 #include <mosquittopp.h>
 #include <boost/regex.hpp>
 
@@ -23,6 +24,9 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+
+FASTLIB_LOG_INIT(migfra_task_handler_log, "Task")
+FASTLIB_LOG_SET_LEVEL_GLOBAL(migfra_task_handler_log, trace);
 
 using Task_container = fast::msg::migfra::Task_container;
 
@@ -58,18 +62,17 @@ void Task_handler::loop()
 			task_cont.from_string(msg);
 			execute(task_cont, hypervisor, comm);
 		} catch (const YAML::Exception &e) {
-			std::cout << "Exception while parsing message." << std::endl;
-			std::cout << e.what() << std::endl;
-			std::cout << "msg dump: " << msg << std::endl;
+			send_parse_error_nothrow(comm, std::string("Exception while parsing message: ") + e.what());
+			FASTLIB_LOG(migfra_task_handler_log, trace) << "msg dump: " << msg;
 		} catch (const Task_container::no_task_exception &e) {
-			std::cout << "Debug: Parsed message not being a Task_container." << std::endl;
+			send_parse_error_nothrow(comm, "Parsed message not being a Task_container.");
 		} catch (const std::exception &e) {
 			if (e.what() == std::string("quit")) {
 				running = false;
-				std::cout << "Debug: Quit msg received." << std::endl;
+				FASTLIB_LOG(migfra_task_handler_log, trace) << "Quit msg received.";
 			} else {
-				std::cout << "Exception: " << e.what() << std::endl;
-				std::cout << "msg dump: " << msg << std::endl;
+				send_parse_error_nothrow(comm, std::string("Exception: ") + e.what());
+				FASTLIB_LOG(migfra_task_handler_log, trace) << "msg dump: " << msg;
 			}
 		}
 	}

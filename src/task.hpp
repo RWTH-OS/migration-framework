@@ -54,6 +54,10 @@ private:
 	static std::condition_variable count_cv;
 };
 
+void send_parse_error(std::shared_ptr<fast::Communicator> comm, const std::string &msg, const std::string &id = "");
+
+void send_parse_error_nothrow(std::shared_ptr<fast::Communicator> comm, const std::string &msg, const std::string &id = "");
+
 void execute(const fast::msg::migfra::Task_container &task_cont, 
 		std::shared_ptr<Hypervisor> hypervisor, 
 		std::shared_ptr<fast::Communicator> comm);

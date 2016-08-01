@@ -39,16 +39,36 @@ Thread_counter::~Thread_counter()
 
 void Thread_counter::wait_for_threads_to_finish()
 {
-	std::cout << "Debug: Waiting for threads to finish..." << std::endl;
+	FASTLIB_LOG(migfra_task_log, trace) << "Waiting for threads to finish...";
 	std::unique_lock<std::mutex> lock(count_mutex);
 	while (count != 0)
 		count_cv.wait(lock);
-	std::cout << "Debug: All threads are finished." << std::endl;
+	FASTLIB_LOG(migfra_task_log, trace) << "All threads are finished.";
 }
 
 unsigned int Thread_counter::count;
 std::mutex Thread_counter::count_mutex;
 std::condition_variable Thread_counter::count_cv;
+
+void send_parse_error(std::shared_ptr<fast::Communicator> comm, const std::string &msg, const std::string &id)
+{
+	FASTLIB_LOG(migfra_task_log, warn) << msg;
+	comm->send_message(Result_container("unknown", {Result("unknown", "error", msg)}, id).to_string());
+}
+
+void send_parse_error_nothrow(std::shared_ptr<fast::Communicator> comm, const std::string &msg, const std::string &id)
+{
+	try {
+		send_parse_error(comm, msg, id);
+	} catch (...) {
+		FASTLIB_LOG(migfra_task_log, trace) << "Exception while sending error message.";
+	}
+}
+
+void send_quit_result(std::shared_ptr<fast::Communicator> comm, const std::string &id)
+{
+	comm->send_message(Result_container("quit", {Result("n/a", "success")}, id).to_string());
+}
 
 std::future<Result> execute(std::shared_ptr<Task> task, 
 		std::shared_ptr<Hypervisor> hypervisor, 
@@ -56,7 +76,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 {
 	auto func = [task, hypervisor, comm]
 	{
-		fast::msg::migfra::Time_measurement time_measurement(task->time_measurement.is_valid() ? task->time_measurement.get() : false);
+		Time_measurement time_measurement(task->time_measurement.is_valid() ? task->time_measurement.get() : false);
 		std::string vm_name;
 		auto start_task = std::dynamic_pointer_cast<Start>(task);
 		auto stop_task = std::dynamic_pointer_cast<Stop>(task);
@@ -93,15 +113,16 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 
 void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
+	auto &id = task_cont.id.is_valid() ? task_cont.id.get() : "";
 	if (task_cont.tasks.empty()) {
-		FASTLIB_LOG(migfra_task_log, warn) << "Empty task container executed.";
+		send_parse_error(comm, "Empty task container executed.", id);
 		return;
 	}
 	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
 	auto &tasks = task_cont.tasks;
 	auto result_type = task_cont.type(true);
-	auto &id = task_cont.id;
 	if (result_type == "quit") {
+		send_quit_result(comm, id);
 		throw std::runtime_error("quit");
 	}
 	auto func = [hypervisor, comm, tasks, result_type, id]
@@ -112,10 +133,7 @@ void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hyperv
 		std::vector<Result> results;
 		for (auto &future_result : future_results) // wait for tasks to finish
 			results.push_back(future_result.get());
-		if (id.is_valid())
-			comm->send_message(Result_container(result_type, results, id).to_string());
-		else
-			comm->send_message(Result_container(result_type, results).to_string());
+		comm->send_message(Result_container(result_type, results, id).to_string());
 	};
 	bool concurrent_execution = !task_cont.concurrent_execution.is_valid() || task_cont.concurrent_execution.get();
 	concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
