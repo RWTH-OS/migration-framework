@@ -1,5 +1,5 @@
-#ifndef LIBVIRT_UTILITY_HPP
-#define LIBVIRT_UTILITY_HPP
+#ifndef UTILITY_HPP
+#define UTILITY_HPP
 
 #include <libvirt/libvirt.h>
 
@@ -36,5 +36,22 @@ struct Deleter_virDomainSnapshot
 // Libvirt sometimes returns a dynamically allocated cstring.
 // As we prefer std::string this function converts and frees.
 std::string convert_and_free_cstr(char *cstr);
+
+// Struct for holding memory stats of a domain.
+struct Memory_stats
+{
+	Memory_stats(virDomainPtr domain);
+
+	std::string str() const;
+	void refresh();
+
+	unsigned long long unused = 0;
+	unsigned long long available = 0;
+	unsigned long long actual_balloon = 0;
+	virDomainPtr domain = nullptr;
+};
+
+// Get hostname
+std::string get_hostname();
 
 #endif

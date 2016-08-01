@@ -88,13 +88,13 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
-	${PROJECT_SOURCE_DIR}/src/libvirt_utility.cpp
+	${PROJECT_SOURCE_DIR}/src/utility.cpp
 )
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
 	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
-	${PROJECT_SOURCE_DIR}/src/libvirt_utility.cpp
+	${PROJECT_SOURCE_DIR}/src/utility.cpp
 )
 
 ### Add config files

@@ -12,14 +12,12 @@
 #include "dummy_hypervisor.hpp"
 #include "task.hpp"
 #include "pscom_handler.hpp"
+#include "utility.hpp"
 
 #include <fast-lib/mqtt_communicator.hpp>
 #include <mosquittopp.h>
 #include <boost/regex.hpp>
 
-#include <unistd.h>
-#include <cstring>
-#include <climits>
 #include <exception>
 #include <stdexcept>
 #include <fstream>
@@ -36,12 +34,7 @@ Task_handler::Task_handler(const std::string &config_file) :
 	std::stringstream string_stream;
 	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
 	auto config = string_stream.str();
-	// Get hostname
-	char hostname_cstr[HOST_NAME_MAX];
-	int ret;
-	if ((ret = gethostname(hostname_cstr, HOST_NAME_MAX)) != 0)
-		std::runtime_error(std::string("Failed getting hostname: ") + std::strerror(ret));
-	const std::string hostname(hostname_cstr, std::strlen(hostname_cstr));
+	const std::string hostname = get_hostname();
 	// Replace placeholder for hostname in config
 	boost::regex hostname_regex("(<hostname>)");
 	config = boost::regex_replace(config, hostname_regex, hostname);

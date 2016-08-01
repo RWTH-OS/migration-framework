@@ -9,7 +9,7 @@
 #include "libvirt_hypervisor.hpp"
 
 #include "pci_device_handler.hpp"
-#include "libvirt_utility.hpp"
+#include "utility.hpp"
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
@@ -277,6 +277,23 @@ std::shared_ptr<virDomain> migrate_domain(virDomainPtr domain, virConnectPtr des
 		return dest_domain;
 }
 
+void sort_domains_by_size(std::shared_ptr<virDomain> &domain1, std::string &name1, std::shared_ptr<virConnect> &conn1, std::string &hostname1, std::shared_ptr<virDomain> &domain2, std::string &name2, std::shared_ptr<virConnect> &conn2, std::string &hostname2)
+{
+	Memory_stats mem_stats1(domain1.get());
+	Memory_stats mem_stats2(domain2.get());
+	auto domain1_size = mem_stats1.actual_balloon;
+	auto domain2_size = mem_stats2.actual_balloon;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain1 size: " << domain1_size;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain2 size: " << domain2_size;
+	if (domain1_size > domain2_size) {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Swap domain1 and domain2.";
+		std::swap(domain1, domain2);
+		std::swap(name1, name2);
+		std::swap(conn1, conn2);
+		std::swap(hostname1, hostname2);
+	}
+}
+
 //
 // Libvirt_hypervisor implementation
 //
@@ -380,26 +397,23 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "transport=" << transport;
 	// Set migration flags
 	auto flags = get_migrate_flags(migration_type);
-	// create migrateuri
-	std::string migrate_uri = get_migrate_uri(rdma_migration, dest_hostname);
 	// Swap migration or normal migration
 	if (task.swap_with.is_valid()) {
 		// Get domains
-		auto local_domain_name = task.vm_name;
-		auto remote_domain_name = task.swap_with.get();
-		auto local_conn = connect("", driver);
-		auto remote_conn = connect(dest_hostname, driver, transport);
 		// domain1 is snapshot-migrated, domain2 is migrated as defined by migration-type
-		auto &name1 = local_domain_name;
-		auto &name2 = remote_domain_name;
-		auto &conn1 = local_conn;
-		auto &conn2 = remote_conn;
+		auto name1 = task.vm_name;
+		auto name2 = task.swap_with.get();
+		auto hostname1 = get_hostname();
+		auto hostname2 = dest_hostname;
+		auto conn1 = connect(hostname1, driver, transport);
+		auto conn2 = connect(hostname2, driver, transport);
 		auto domain1 = find_by_name(conn1.get(), name1);
 		auto domain2 = find_by_name(conn2.get(), name2);
 		// Check if domains are in running state
 		check_state(domain1.get(), VIR_DOMAIN_RUNNING);
 		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
-		// Compare size and swap if necessary TODO: Replace with real implementation
+		// Compare size and swap if necessary
+		sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
 		// Guard migration of PCI devices. TODO: Fix time_measurement.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
 		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement);
@@ -412,6 +426,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// destroy vm1
 		destroy(domain1.get());
 		time_measurement.tock("suspend-vm1");
+		// Create migrateuri
+		std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
 		// Migrate vm2
 		time_measurement.tick("migrate-vm2");
 		auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri);
@@ -444,6 +460,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
 		// Connect to destination
 		auto dest_connection = connect(dest_hostname, driver, transport);
+		// Create migrateuri
+		std::string migrate_uri = get_migrate_uri(rdma_migration, dest_hostname);
 		// Migrate domain
 		time_measurement.tick("migrate");
 		auto dest_domain = migrate_domain(domain.get(), dest_connection.get(), flags, migrate_uri);

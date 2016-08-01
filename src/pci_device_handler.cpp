@@ -8,7 +8,7 @@
 
 #include "pci_device_handler.hpp"
 
-#include "libvirt_utility.hpp"
+#include "utility.hpp"
 
 #include <fast-lib/log.hpp>
 #include <boost/property_tree/xml_parser.hpp>
