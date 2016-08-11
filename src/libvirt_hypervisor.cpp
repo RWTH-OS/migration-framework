@@ -72,7 +72,7 @@ std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string
 			Deleter_virDomain()
 	);
 	if (!domain)
-		throw std::runtime_error("Error defining domain from xml.");
+		throw std::runtime_error(std::string("Error defining domain from xml.") + virGetLastErrorMessage());
 	return domain;
 }
 
@@ -84,7 +84,7 @@ std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string
 			Deleter_virDomain()
 	);
 	if (!domain)
-		throw std::runtime_error("Error creating domain from xml.");
+		throw std::runtime_error(std::string("Error creating domain from xml.") + virGetLastErrorMessage());
 	return domain;
 }
 
@@ -96,7 +96,7 @@ std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &n
 		Deleter_virDomain()
 	);
 	if (!domain)
-		throw std::runtime_error(std::string("Domain not found: ") + virGetLastErrorMessage());
+		throw std::runtime_error(virGetLastErrorMessage());
 	return domain;
 }
 

@@ -13,7 +13,8 @@ struct Deleter_virConnect
 {
 	void operator()(virConnectPtr ptr) const
 	{
-		virConnectClose(ptr);
+		if (ptr)
+			virConnectClose(ptr);
 	}
 };
 
@@ -21,7 +22,8 @@ struct Deleter_virDomain
 {
 	void operator()(virDomainPtr ptr) const
 	{
-		virDomainFree(ptr);
+		if (ptr)
+			virDomainFree(ptr);
 	}
 };
 
@@ -29,7 +31,8 @@ struct Deleter_virDomainSnapshot
 {
 	void operator()(virDomainSnapshotPtr ptr) const
 	{
-		virDomainSnapshotFree(ptr);
+		if (ptr)
+			virDomainSnapshotFree(ptr);
 	}
 };
 
