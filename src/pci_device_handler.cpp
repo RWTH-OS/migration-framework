@@ -8,9 +8,10 @@
 
 #include "pci_device_handler.hpp"
 
+#include "utility.hpp"
+
 #include <fast-lib/log.hpp>
 #include <boost/property_tree/xml_parser.hpp>
-//#include <boost/regex.hpp>
 
 #include <iostream>
 #include <stdexcept>
@@ -30,19 +31,6 @@ struct Deleter_virNodeDevice
 		virNodeDeviceFree(ptr);
 	}
 };
-
-// Libvirt sometimes returns a dynamically allocated cstring.
-// As we prefer std::string this function converts and frees.
-std::string convert_and_free_cstr(char *cstr)
-{
-	std::string str;
-	if (cstr) {
-		str.assign(cstr);
-		free(cstr);
-	}
-	return str;
-
-}
 
 // Wraps ugly passing of C style array of raw pointers to returning vector of smart pointers.
 std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node_devices_wrapper(virConnectPtr conn, unsigned int flags)
@@ -226,10 +214,6 @@ std::string Device::to_hostdev_xml() const
 	hostdev_ptree.put("hostdev.<xmlattr>.type", "pci");
 	hostdev_ptree.put("hostdev.<xmlattr>.managed", "yes");
 	hostdev_ptree.put_child("hostdev.source", address.to_address_ptree());
-
-	// Remove xml tag
-	//boost::regex xml_tag_regex(R"((^<\?xml.*version.*encoding.*\?>\n?))");
-	//return boost::regex_replace(hostdev_xml_sstream.str(), xml_tag_regex, "");
 	return write_xml_to_string(hostdev_ptree);
 }
 
@@ -402,15 +386,18 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 //
 
 Migrate_devices_guard::Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler,
-		std::shared_ptr<virDomain> domain, Time_measurement &time_measurement) :
+		std::shared_ptr<virDomain> domain, Time_measurement &time_measurement, std::string tag_postfix) :
 	pci_device_handler(pci_device_handler),
 	domain(domain),
-	time_measurement(time_measurement)
+	time_measurement(time_measurement),
+	tag_postfix(std::move(tag_postfix))
 {
+	if (this->tag_postfix != "")
+		this->tag_postfix = "-" + this->tag_postfix;
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Detach all devices.";
-	time_measurement.tick("detach-pci-devs");
+	time_measurement.tick("detach-pci-devs" + this->tag_postfix);
 	detached_types_counts = pci_device_handler->detach(domain.get());
-	time_measurement.tock("detach-pci-devs");
+	time_measurement.tock("detach-pci-devs" + this->tag_postfix);
 }
 
 Migrate_devices_guard::~Migrate_devices_guard() noexcept(false)
@@ -434,12 +421,12 @@ void Migrate_devices_guard::set_destination_domain(std::shared_ptr<virDomain> de
 
 void Migrate_devices_guard::reattach()
 {
-	time_measurement.tick("reattach-pci-devs");
+	time_measurement.tick("reattach-pci-devs" + tag_postfix);
 	for (auto &type_count : detached_types_counts) {
 		for (;type_count.second != 0; --type_count.second) {
 			FASTLIB_LOG(pcidev_handler_log, trace) << "Reattach device of type " << type_count.first.str();
 			pci_device_handler->attach(domain.get(), type_count.first);
 		}
 	}
-	time_measurement.tock("reattach-pci-devs");
+	time_measurement.tock("reattach-pci-devs" + tag_postfix);
 }

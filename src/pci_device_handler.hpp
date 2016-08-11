@@ -98,7 +98,7 @@ private:
 class Migrate_devices_guard
 {
 public:
-	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, std::shared_ptr<virDomain> domain, Time_measurement &time_measurement);
+	Migrate_devices_guard(std::shared_ptr<PCI_device_handler> pci_device_handler, std::shared_ptr<virDomain> domain, Time_measurement &time_measurement, std::string tag_postfix = "");
 	~Migrate_devices_guard() noexcept(false);
 
 	void set_destination_domain(std::shared_ptr<virDomain> dest_domain);
@@ -108,6 +108,7 @@ private:
 	std::shared_ptr<virDomain> domain;
 	std::unordered_map<PCI_id, size_t> detached_types_counts;
 	Time_measurement &time_measurement;
+	std::string tag_postfix;
 };
 
 #endif
