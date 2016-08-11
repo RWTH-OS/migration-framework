@@ -18,6 +18,7 @@
 #include <utility>
 #include <iostream>
 #include <array>
+#include <regex>
 
 FASTLIB_LOG_INIT(migfra_task_log, "Task")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(migfra_task_log, trace);
@@ -86,8 +87,16 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 			if (start_task) {
 				if (start_task->vm_name.is_valid())
 					vm_name = start_task->vm_name.get();
-				else if (start_task->xml.is_valid())
-					vm_name = start_task->xml.get();
+				else if (start_task->xml.is_valid()) {
+					std::regex regex(R"(<name>(\w+)</name>)");
+					auto xml = start_task->xml.get();
+					std::smatch match;
+					auto found = std::regex_search(xml, match, regex);
+					if (found && match.size() == 2)
+						vm_name = match[1].str();
+					else
+						vm_name = xml;
+				}
 				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
 				vm_name = stop_task->vm_name;
