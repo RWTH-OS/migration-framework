@@ -41,6 +41,12 @@ void Memory_stats::refresh()
 	}
 }
 
+unsigned long long get_memory_size(virDomainPtr domain)
+{
+	Memory_stats mem_stats(domain);
+	return mem_stats.actual_balloon;
+}
+
 std::string get_hostname()
 {
 	char hostname_cstr[HOST_NAME_MAX];

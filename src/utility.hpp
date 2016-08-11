@@ -51,6 +51,9 @@ struct Memory_stats
 	virDomainPtr domain = nullptr;
 };
 
+// Get memory size in KiB
+unsigned long long get_memory_size(virDomainPtr domain);
+
 // Get hostname
 std::string get_hostname();
 

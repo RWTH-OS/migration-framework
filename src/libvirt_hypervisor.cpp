@@ -294,6 +294,23 @@ void sort_domains_by_size(std::shared_ptr<virDomain> &domain1, std::string &name
 	}
 }
 
+unsigned long long get_free_memory(virConnectPtr conn)
+{
+	auto memory = virNodeGetFreeMemory(conn);
+	if (memory == 0)
+		throw std::runtime_error(std::string("Error geting free node memory: ") + virGetLastErrorMessage());
+	return memory;
+}
+
+bool check_free_memory(virDomainPtr domain1, virConnectPtr conn1, virDomainPtr domain2, virConnectPtr conn2)
+{
+	auto domain1_size = get_memory_size(domain1);
+	auto domain2_size = get_memory_size(domain2);
+	auto host1_free_memory = get_free_memory(conn1);
+	auto host2_free_memory = get_free_memory(conn2);
+	return host1_free_memory > domain2_size && host2_free_memory > domain1_size;
+}
+
 //
 // Libvirt_hypervisor implementation
 //
@@ -383,6 +400,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
 }
 
+// TODO: Thread based approach
 void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
 	const std::string &dest_hostname = task.dest_hostname;
@@ -413,43 +431,64 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		check_state(domain1.get(), VIR_DOMAIN_RUNNING);
 		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
 		// Compare size and swap if necessary
-		sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
+		bool with_snapshot = !check_free_memory(domain1.get(), conn1.get(), domain2.get(), conn2.get());
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
 		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement, name1);
 		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement, name2);
-		// Suspend vm1
-		time_measurement.tick("downtime-" + name1);
-		time_measurement.tick("suspend-" + name1);
-		suspend(domain1.get());
-		// Take snapshot of vm1.
-		auto snapshot = create_snapshot(domain1.get());
-		// destroy vm1
-		destroy(domain1.get());
-		time_measurement.tock("suspend-" + name1);
-		// Create migrateuri
-		std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
-		// Migrate vm2
-		time_measurement.tick("migrate-" + name2);
-		auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri);
-		time_measurement.tock("migrate-" + name2);
-		// Set destination domain for guard
-		dev_guard2.set_destination_domain(dest_domain2);
-		// Get snapshotted domain on dest
-		time_measurement.tick("resume-" + name1);
-		auto dest_domain1 = find_by_name(conn2.get(), name1);
-		// Redefine snapshot on remote
-		auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
-		// Remove snapshot from src
-		delete_snapshot(snapshot.get());
-		// Revert to snapshot
-		revert_to_snapshot(dest_snapshot.get());
-		time_measurement.tock("resume-" + name1);
-		time_measurement.tock("downtime-" + name1);
-		// Remove snapshot from destination
-		delete_snapshot(dest_snapshot.get());
-		// Set destination domain for guard
-		dev_guard1.set_destination_domain(dest_domain1);
+		if (with_snapshot) {
+			// TODO: RAII handler for snapshot for better error recovery
+			sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
+			// Suspend vm1
+			time_measurement.tick("downtime-" + name1);
+			time_measurement.tick("suspend-" + name1);
+			suspend(domain1.get());
+			// Take snapshot of vm1.
+			auto snapshot = create_snapshot(domain1.get());
+			// destroy vm1
+			destroy(domain1.get());
+			time_measurement.tock("suspend-" + name1);
+			// Create migrateuri for vm2
+			std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
+			// Migrate vm2
+			time_measurement.tick("migrate-" + name2);
+			auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri);
+			time_measurement.tock("migrate-" + name2);
+			// Set destination domain for guard of vm2
+			dev_guard2.set_destination_domain(dest_domain2);
+			// Get snapshotted domain on dest
+			time_measurement.tick("resume-" + name1);
+			auto dest_domain1 = find_by_name(conn2.get(), name1);
+			// Redefine snapshot on remote
+			auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
+			// Remove snapshot from src
+			delete_snapshot(snapshot.get());
+			// Revert to snapshot
+			revert_to_snapshot(dest_snapshot.get());
+			time_measurement.tock("resume-" + name1);
+			time_measurement.tock("downtime-" + name1);
+			// Remove snapshot from destination
+			delete_snapshot(dest_snapshot.get());
+			// Set destination domain for guard
+			dev_guard1.set_destination_domain(dest_domain1);
+		} else {
+			// Create migrateuri for vm1
+			std::string migrate_uri1 = get_migrate_uri(rdma_migration, hostname2);
+			// Migrate vm1
+			time_measurement.tick("migrate-" + name1);
+			auto dest_domain1 = migrate_domain(domain1.get(), conn2.get(), flags, migrate_uri1);
+			time_measurement.tock("migrate-" + name1);
+			// Set destination domain for guard of vm1
+			dev_guard1.set_destination_domain(dest_domain1);
+			// Create migrateuri for vm2
+			std::string migrate_uri2 = get_migrate_uri(rdma_migration, hostname1);
+			// Migrate vm2
+			time_measurement.tick("migrate-" + name2);
+			auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri2);
+			time_measurement.tock("migrate-" + name2);
+			// Set destination domain for guard of vm2
+			dev_guard2.set_destination_domain(dest_domain2);
+		}
 	} else {
 		// Connect to libvirt
 		auto conn = connect("", driver);

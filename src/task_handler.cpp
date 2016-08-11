@@ -25,7 +25,7 @@
 #include <sstream>
 #include <iostream>
 
-FASTLIB_LOG_INIT(migfra_task_handler_log, "Task")
+FASTLIB_LOG_INIT(migfra_task_handler_log, "Task_handler")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(migfra_task_handler_log, trace);
 
 using Task_container = fast::msg::migfra::Task_container;
