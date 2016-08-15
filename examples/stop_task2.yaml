@@ -1,6 +1,6 @@
 ---
 task: stop vm
 list:
-  - vm-name: centos7113
+  - vm-name: centos7114
     force: false
 ...

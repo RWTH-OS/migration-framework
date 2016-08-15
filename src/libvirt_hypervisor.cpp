@@ -9,7 +9,7 @@
 #include "libvirt_hypervisor.hpp"
 
 #include "pci_device_handler.hpp"
-#include "libvirt_utility.hpp"
+#include "utility.hpp"
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
@@ -72,8 +72,8 @@ std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string
 			Deleter_virDomain()
 	);
 	if (!domain)
-		throw std::runtime_error("Error defining domain from xml.");
-	return std::move(domain);
+		throw std::runtime_error(std::string("Error defining domain from xml.") + virGetLastErrorMessage());
+	return domain;
 }
 
 std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
@@ -84,8 +84,8 @@ std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string
 			Deleter_virDomain()
 	);
 	if (!domain)
-		throw std::runtime_error("Error creating domain from xml.");
-	return std::move(domain);
+		throw std::runtime_error(std::string("Error creating domain from xml.") + virGetLastErrorMessage());
+	return domain;
 }
 
 std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &name)
@@ -96,8 +96,8 @@ std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &n
 		Deleter_virDomain()
 	);
 	if (!domain)
-		throw std::runtime_error("Domain not found.");
-	return std::move(domain);
+		throw std::runtime_error(virGetLastErrorMessage());
+	return domain;
 }
 
 void create(virDomainPtr domain)
@@ -189,6 +189,128 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 				+ ".");
 }
 
+void suspend(virDomainPtr domain)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Suspend domain.";
+	if (virDomainSuspend(domain) == -1)
+		throw std::runtime_error(std::string("Error suspending domain: ") + virGetLastErrorMessage());
+}
+
+void destroy(virDomainPtr domain)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Destroy domain.";
+	if (virDomainDestroy(domain) == -1)
+		throw std::runtime_error(std::string("Error destroying domain: ") + virGetLastErrorMessage());
+}
+
+void delete_snapshot(virDomainSnapshotPtr snapshot)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Delete snapshot.";
+	if (virDomainSnapshotDelete(snapshot, 0) == -1)
+		throw std::runtime_error(std::string("Error deleting snapshot: ") + virGetLastErrorMessage());
+}
+
+void revert_to_snapshot(virDomainSnapshotPtr snapshot)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Revert to snapshot.";
+	if (virDomainRevertToSnapshot(snapshot, VIR_DOMAIN_SNAPSHOT_REVERT_RUNNING) == -1)
+		throw std::runtime_error(std::string("Error reverting snapshot: ") + virGetLastErrorMessage());
+}
+
+std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create snapshot";
+	std::shared_ptr<virDomainSnapshot> snapshot(
+			virDomainSnapshotCreateXML(domain, 
+"<domainsnapshot><description>Snapshot for migration</description>\
+	<memory snapshot='internal'/>\
+</domainsnapshot>"
+			, 0),
+			Deleter_virDomainSnapshot()
+	);
+	if (!snapshot)
+		throw std::runtime_error("Error creating snapshot.");
+	return snapshot;
+}
+
+std::shared_ptr<virDomainSnapshot> redefine_snapshot(virDomainPtr domain, virDomainSnapshotPtr snapshot)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Redefine snapshot on remote";
+	auto xml = convert_and_free_cstr(virDomainSnapshotGetXMLDesc(snapshot, VIR_DOMAIN_XML_SECURE));
+	std::shared_ptr<virDomainSnapshot> dest_snapshot(
+			virDomainSnapshotCreateXML(domain, xml.c_str(), VIR_DOMAIN_SNAPSHOT_CREATE_REDEFINE),
+			Deleter_virDomainSnapshot()
+	);
+	return dest_snapshot;
+}
+
+std::string get_migrate_uri(bool rdma_migration, const std::string &dest_hostname)
+{
+	std::string migrate_uri = rdma_migration ? "rdma://" + dest_hostname + "-ib" : "";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << (rdma_migration ? "Use migrate uri: " + migrate_uri + "." : "Use default migrate uri.");
+	return migrate_uri;
+}
+
+unsigned long get_migrate_flags(std::string migration_type)
+{
+	unsigned long flags = 0;
+	if (migration_type == "live") {
+		flags |= VIR_MIGRATE_LIVE;
+	} else if (migration_type == "offline") {
+		flags |= VIR_MIGRATE_OFFLINE;
+	} else if (migration_type != "warm") {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Unknown migration type " << migration_type << ".";
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Using warm migration as fallback.";
+	}
+	return flags;
+}
+
+std::shared_ptr<virDomain> migrate_domain(virDomainPtr domain, virConnectPtr dest_conn, unsigned long flags, const std::string &migrate_uri)
+{
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
+		std::shared_ptr<virDomain> dest_domain(
+			virDomainMigrate(domain, dest_conn, flags, 0, migrate_uri != "" ? migrate_uri.c_str() : nullptr, 0),
+			Deleter_virDomain()
+		);
+		if (!dest_domain)
+			throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
+		return dest_domain;
+}
+
+void sort_domains_by_size(std::shared_ptr<virDomain> &domain1, std::string &name1, std::shared_ptr<virConnect> &conn1, std::string &hostname1, std::shared_ptr<virDomain> &domain2, std::string &name2, std::shared_ptr<virConnect> &conn2, std::string &hostname2)
+{
+	Memory_stats mem_stats1(domain1.get());
+	Memory_stats mem_stats2(domain2.get());
+	auto domain1_size = mem_stats1.actual_balloon;
+	auto domain2_size = mem_stats2.actual_balloon;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain1 size: " << domain1_size;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain2 size: " << domain2_size;
+	if (domain1_size > domain2_size) {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Swap domain1 and domain2.";
+		std::swap(domain1, domain2);
+		std::swap(name1, name2);
+		std::swap(conn1, conn2);
+		std::swap(hostname1, hostname2);
+	}
+}
+
+unsigned long long get_free_memory(virConnectPtr conn)
+{
+	auto memory = virNodeGetFreeMemory(conn);
+	if (memory == 0)
+		throw std::runtime_error(std::string("Error geting free node memory: ") + virGetLastErrorMessage());
+	return memory;
+}
+
+bool check_free_memory(virDomainPtr domain1, virConnectPtr conn1, virDomainPtr domain2, virConnectPtr conn2)
+{
+	auto domain1_size = get_memory_size(domain1);
+	auto domain2_size = get_memory_size(domain2);
+	auto host1_free_memory = get_free_memory(conn1);
+	auto host2_free_memory = get_free_memory(conn2);
+	return host1_free_memory > domain2_size && host2_free_memory > domain1_size;
+}
+
 //
 // Libvirt_hypervisor implementation
 //
@@ -278,48 +400,115 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
 }
 
+// TODO: Thread based approach
 void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
 	const std::string &dest_hostname = task.dest_hostname;
 	auto migration_type = task.migration_type.is_valid() ? task.migration_type.get() : "warm";
-	bool live_migration = migration_type == "live";
 	bool rdma_migration = task.rdma_migration.is_valid() ? task.rdma_migration.get() : false;;
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	auto transport = task.transport.is_valid() ? task.transport.get() : default_transport;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "migration-type=" << migration_type;
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "live-migration=" << live_migration;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "rdma-migration=" << rdma_migration;
-	// Connect to libvirt to libvirt
-	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "driver=" << driver;
-	auto conn = connect("", driver);
-	// Get domain by name
-	auto domain = find_by_name(conn.get(), task.vm_name);
-	// Check if domain is in running state
-	check_state(domain.get(), VIR_DOMAIN_RUNNING);
-	// Guard migration of PCI devices.
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
-	Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
-	// Connect to destination
-	auto transport = task.transport.is_valid() ? task.transport.get() : default_transport;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "transport=" << transport;
-	auto dest_connection = connect(dest_hostname, driver, transport);
 	// Set migration flags
-	unsigned long flags = 0;
-	flags |= live_migration ? VIR_MIGRATE_LIVE : 0;
-	// create migrateuri
-	std::string migrate_uri = rdma_migration ? "rdma://" + dest_hostname + "-ib" : "";
-	FASTLIB_LOG(libvirt_hyp_log, trace) << (rdma_migration ? "Use migrate uri: " + migrate_uri + "." : "Use default migrate uri.");
-	// Migrate domain
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
-	time_measurement.tick("migrate");
-	std::shared_ptr<virDomain> dest_domain(
-		virDomainMigrate(domain.get(), dest_connection.get(), flags, 0, rdma_migration ? migrate_uri.c_str() : nullptr, 0),
-		Deleter_virDomain()
-	);
-	time_measurement.tock("migrate");
-	if (!dest_domain)
-		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
-	// Set destination domain for guards
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
-	dev_guard.set_destination_domain(dest_domain);
+	auto flags = get_migrate_flags(migration_type);
+	// Swap migration or normal migration
+	if (task.swap_with.is_valid()) {
+		// Get domains
+		// domain1 is snapshot-migrated, domain2 is migrated as defined by migration-type
+		auto name1 = task.vm_name;
+		auto name2 = task.swap_with.get();
+		auto hostname1 = get_hostname();
+		auto hostname2 = dest_hostname;
+		auto conn1 = connect(hostname1, driver, transport);
+		auto conn2 = connect(hostname2, driver, transport);
+		auto domain1 = find_by_name(conn1.get(), name1);
+		auto domain2 = find_by_name(conn2.get(), name2);
+		// Check if domains are in running state
+		check_state(domain1.get(), VIR_DOMAIN_RUNNING);
+		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
+		// Compare size and swap if necessary
+		bool with_snapshot = !check_free_memory(domain1.get(), conn1.get(), domain2.get(), conn2.get());
+		// Guard migration of PCI devices.
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
+		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement, name1);
+		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement, name2);
+		if (with_snapshot) {
+			// TODO: RAII handler for snapshot for better error recovery
+			sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
+			// Suspend vm1
+			time_measurement.tick("downtime-" + name1);
+			time_measurement.tick("suspend-" + name1);
+			suspend(domain1.get());
+			// Take snapshot of vm1.
+			auto snapshot = create_snapshot(domain1.get());
+			// destroy vm1
+			destroy(domain1.get());
+			time_measurement.tock("suspend-" + name1);
+			// Create migrateuri for vm2
+			std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
+			// Migrate vm2
+			time_measurement.tick("migrate-" + name2);
+			auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri);
+			time_measurement.tock("migrate-" + name2);
+			// Set destination domain for guard of vm2
+			dev_guard2.set_destination_domain(dest_domain2);
+			// Get snapshotted domain on dest
+			time_measurement.tick("resume-" + name1);
+			auto dest_domain1 = find_by_name(conn2.get(), name1);
+			// Redefine snapshot on remote
+			auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
+			// Remove snapshot from src
+			delete_snapshot(snapshot.get());
+			// Revert to snapshot
+			revert_to_snapshot(dest_snapshot.get());
+			time_measurement.tock("resume-" + name1);
+			time_measurement.tock("downtime-" + name1);
+			// Remove snapshot from destination
+			delete_snapshot(dest_snapshot.get());
+			// Set destination domain for guard
+			dev_guard1.set_destination_domain(dest_domain1);
+		} else {
+			// Create migrateuri for vm1
+			std::string migrate_uri1 = get_migrate_uri(rdma_migration, hostname2);
+			// Migrate vm1
+			time_measurement.tick("migrate-" + name1);
+			auto dest_domain1 = migrate_domain(domain1.get(), conn2.get(), flags, migrate_uri1);
+			time_measurement.tock("migrate-" + name1);
+			// Set destination domain for guard of vm1
+			dev_guard1.set_destination_domain(dest_domain1);
+			// Create migrateuri for vm2
+			std::string migrate_uri2 = get_migrate_uri(rdma_migration, hostname1);
+			// Migrate vm2
+			time_measurement.tick("migrate-" + name2);
+			auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri2);
+			time_measurement.tock("migrate-" + name2);
+			// Set destination domain for guard of vm2
+			dev_guard2.set_destination_domain(dest_domain2);
+		}
+	} else {
+		// Connect to libvirt
+		auto conn = connect("", driver);
+		// Get domain by name
+		auto domain = find_by_name(conn.get(), task.vm_name);
+		// Check if domain is in running state
+		check_state(domain.get(), VIR_DOMAIN_RUNNING);
+		// Guard migration of PCI devices.
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
+		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
+		// Connect to destination
+		auto dest_connection = connect(dest_hostname, driver, transport);
+		// Create migrateuri
+		std::string migrate_uri = get_migrate_uri(rdma_migration, dest_hostname);
+		// Migrate domain
+		time_measurement.tick("migrate");
+		auto dest_domain = migrate_domain(domain.get(), dest_connection.get(), flags, migrate_uri);
+		time_measurement.tock("migrate");
+		// Set destination domain for guards
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
+		dev_guard.set_destination_domain(dest_domain);
+	}
 }

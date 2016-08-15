@@ -12,19 +12,21 @@
 #include "dummy_hypervisor.hpp"
 #include "task.hpp"
 #include "pscom_handler.hpp"
+#include "utility.hpp"
 
 #include <fast-lib/mqtt_communicator.hpp>
+#include <fast-lib/log.hpp>
 #include <mosquittopp.h>
 #include <boost/regex.hpp>
 
-#include <unistd.h>
-#include <cstring>
-#include <climits>
 #include <exception>
 #include <stdexcept>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+
+FASTLIB_LOG_INIT(migfra_task_handler_log, "Task_handler")
+FASTLIB_LOG_SET_LEVEL_GLOBAL(migfra_task_handler_log, trace);
 
 using Task_container = fast::msg::migfra::Task_container;
 
@@ -36,12 +38,7 @@ Task_handler::Task_handler(const std::string &config_file) :
 	std::stringstream string_stream;
 	string_stream << file_stream.rdbuf(); // Filestream to stingstream conversion
 	auto config = string_stream.str();
-	// Get hostname
-	char hostname_cstr[HOST_NAME_MAX];
-	int ret;
-	if ((ret = gethostname(hostname_cstr, HOST_NAME_MAX)) != 0)
-		std::runtime_error(std::string("Failed getting hostname: ") + std::strerror(ret));
-	const std::string hostname(hostname_cstr, std::strlen(hostname_cstr));
+	const std::string hostname = get_hostname();
 	// Replace placeholder for hostname in config
 	boost::regex hostname_regex("(<hostname>)");
 	config = boost::regex_replace(config, hostname_regex, hostname);
@@ -65,18 +62,17 @@ void Task_handler::loop()
 			task_cont.from_string(msg);
 			execute(task_cont, hypervisor, comm);
 		} catch (const YAML::Exception &e) {
-			std::cout << "Exception while parsing message." << std::endl;
-			std::cout << e.what() << std::endl;
-			std::cout << "msg dump: " << msg << std::endl;
+			send_parse_error_nothrow(comm, std::string("Exception while parsing message: ") + e.what());
+			FASTLIB_LOG(migfra_task_handler_log, trace) << "msg dump: " << msg;
 		} catch (const Task_container::no_task_exception &e) {
-			std::cout << "Debug: Parsed message not being a Task_container." << std::endl;
+			send_parse_error_nothrow(comm, "Parsed message not being a Task_container.");
 		} catch (const std::exception &e) {
 			if (e.what() == std::string("quit")) {
 				running = false;
-				std::cout << "Debug: Quit msg received." << std::endl;
+				FASTLIB_LOG(migfra_task_handler_log, trace) << "Quit msg received.";
 			} else {
-				std::cout << "Exception: " << e.what() << std::endl;
-				std::cout << "msg dump: " << msg << std::endl;
+				send_parse_error_nothrow(comm, std::string("Exception: ") + e.what());
+				FASTLIB_LOG(migfra_task_handler_log, trace) << "msg dump: " << msg;
 			}
 		}
 	}
