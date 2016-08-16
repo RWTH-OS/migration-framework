@@ -88,7 +88,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 				if (start_task->vm_name.is_valid())
 					vm_name = start_task->vm_name.get();
 				else if (start_task->xml.is_valid()) {
-					std::regex regex(R"(<name>(\w+)</name>)");
+					std::regex regex(R"(<name>(.+)</name>)");
 					auto xml = start_task->xml.get();
 					std::smatch match;
 					auto found = std::regex_search(xml, match, regex);
