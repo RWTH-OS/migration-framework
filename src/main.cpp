@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <cstdio>
 
 
 int main(int argc, char *argv[])
@@ -30,9 +31,10 @@ int main(int argc, char *argv[])
 		namespace po = boost::program_options;
 		po::options_description desc("Options");
 		desc.add_options()
-			("help", "produce help message")
+			("help,h", "produce help message")
+			("config,c", po::value<std::string>(), "path to config file")
 			("daemon,d", "start as daemon")
-			("config", po::value<std::string>(), "path to config file");
+			("log,l", po::value<std::string>(), "path to log file");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		po::notify(vm);
@@ -44,6 +46,14 @@ int main(int argc, char *argv[])
 		if (vm.count("config"))
 			config_file_name = vm["config"].as<std::string>();
 		config_file_name = convert_and_free_cstr(realpath(config_file_name.c_str(), nullptr));
+		if (vm.count("log")) {
+			auto log_file_name = vm["log"].as<std::string>();
+			auto log_file = fopen(log_file_name.c_str(), "a");
+			dup2(fileno(log_file), STDIN_FILENO);
+			dup2(fileno(log_file), STDOUT_FILENO);
+			dup2(fileno(log_file), STDERR_FILENO);
+			fclose(log_file);
+		}
 		if (vm.count("daemon")) {
 			std::cout << "Starting migfra daemon." << std::endl;
 			pid_t pid;
@@ -60,16 +70,11 @@ int main(int argc, char *argv[])
 			if (chdir("/") < 0)
 				return EXIT_FAILURE;
 			//TODO redirect stdout to syslog
-/*			dup2(fileno(someopenfile), STDIN_FILENO);
-			dup2(fileno(someotherfile), STDOUT_FILENO);
-			dup2(fileno(somethirdopenfile), STDERR_FILENO);
-			fclose(someopenfile);
-			fclose(someotheropenfile);
-			fclose(somethirdopenfile);
-*/
-			close(STDIN_FILENO);
-			close(STDOUT_FILENO);
-			close(STDERR_FILENO);
+			if (!vm.count("log")) {
+				close(STDIN_FILENO);
+				close(STDOUT_FILENO);
+				close(STDERR_FILENO);
+			}
 		}
 		Task_handler task_handler(config_file_name);
 		std::cout << "Debug: task_handler loop started." << std::endl;
