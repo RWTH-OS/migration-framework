@@ -22,10 +22,32 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <cstdio>
-
+#include <sys/file.h>
+#include <errno.h>
 
 int main(int argc, char *argv[])
 {
+	// Check for other instances running on this machine
+	int err;
+	std::string pid_file_name = "/tmp/migfra.pid";
+	int pid_file = open(pid_file_name.c_str(), O_CREAT | O_RDWR, 0666);
+	err = errno;
+	if (pid_file == -1) {
+		std::cout << "Cannot open " << pid_file_name << " (" << strerror(err) << ")." << std::endl;
+		return EXIT_FAILURE;
+	}
+	int rc = flock(pid_file, LOCK_EX | LOCK_NB);
+	err = errno;
+	if (rc) {
+		if(EWOULDBLOCK == err) {
+			std::cout << "Another instance is already running on this machine." << std::endl;;
+			return EXIT_FAILURE;
+		} else {
+			std::cout << "Error locking " << pid_file_name << " (" << strerror(err) << ")." << std::endl;
+			return EXIT_FAILURE;
+		}
+	}
+
 	try {
 		mosqpp::lib_init();
 		namespace po = boost::program_options;
