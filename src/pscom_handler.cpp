@@ -23,7 +23,7 @@ Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 	answers(0),
 	time_measurement(time_measurement),
 	request_topic(std::regex_replace(request_topic_template, std::regex(R"((<vm_name>))"), vm_name)),
-	response_topic(std::regex_replace(request_topic_template, std::regex(R"((<vm_name>))"), vm_name))
+	response_topic(std::regex_replace(response_topic_template, std::regex(R"((<vm_name>))"), vm_name))
 {
 	// Autodetect pscom process count if messages_expected equals 0
 	if (messages_expected == 0) {
