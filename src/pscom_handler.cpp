@@ -37,8 +37,8 @@ Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 			channel->openSession();
 			channel->requestExec("/opt/parastation/bin/psiadmin -d -c 'l p -1' | perl -n -a -e 'print if /^ / and $F[5] >= 0' | wc -l");
 			unsigned int bytes_read=-1, total_bytes;
-			char res[64];
-			for (total_bytes=0; (bytes_read != 0) && (total_bytes <= 64); total_bytes+=bytes_read) {
+			char res[EXEC_BUF_SIZE];
+			for (total_bytes=0; (bytes_read != 0) && (total_bytes <= EXEC_BUF_SIZE); total_bytes+=bytes_read) {
 				bytes_read = channel->read(static_cast<char*>(res+total_bytes), sizeof(res)-total_bytes);
 			}
 			messages_expected = std::stoi(res);
