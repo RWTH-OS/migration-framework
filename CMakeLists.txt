@@ -66,6 +66,7 @@ ExternalProject_Add(
 ExternalProject_Get_Property(libssh install_dir)
 include_directories(SYSTEM "${install_dir}/include")
 list(APPEND LIBS "${install_dir}/lib/libssh.so")
+list(APPEND LIBS_BENCHMARK "${install_dir}/lib/libssh.so")
 #add_definitions(-DLIBSSH_STATIC=1)
 
 
