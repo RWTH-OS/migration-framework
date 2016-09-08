@@ -30,7 +30,9 @@ int main(int argc, char *argv[])
 	// Check for other instances running on this machine
 	int err;
 	std::string pid_file_name = "/tmp/migfra.pid";
+	auto previous_umask = umask(0);
 	int pid_file = open(pid_file_name.c_str(), O_CREAT | O_RDWR, 0666);
+	umask(previous_umask);
 	err = errno;
 	if (pid_file == -1) {
 		std::cout << "Cannot open " << pid_file_name << " (" << strerror(err) << ")." << std::endl;
