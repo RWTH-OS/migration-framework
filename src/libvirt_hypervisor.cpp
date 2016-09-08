@@ -398,6 +398,11 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
 	wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF);
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
+	// Undefine if requested
+	if (task.undefine.is_valid()) {
+		if (virDomainUndefine(domain.get()) == -1)
+			throw std::runtime_error("Error undefining domain.");
+	}
 }
 
 // TODO: Thread based approach
