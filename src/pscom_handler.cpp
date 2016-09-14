@@ -57,13 +57,15 @@ Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 	if (task.pscom_hook_procs.is_valid()) {
 		if (task.pscom_hook_procs.get() == "auto") {
 			messages_expected = pscom_process_auto_detection(vm_name);
+		} else {
+			try {
+				messages_expected = std::stoul(task.pscom_hook_procs.get());
+			} catch (const std::exception &e) {
+				throw std::runtime_error("pscom-hook-procs is malformed: " + std::string(e.what()));
+			}
 		}
 	} else {
-		try {
-			messages_expected = std::stoul(task.pscom_hook_procs.get());
-		} catch (const std::exception &e) {
-			throw std::runtime_error("pscom-hook-procs is malformed: " + std::string(e.what()));
-		}
+		messages_expected = 0;
 	}
 
 
