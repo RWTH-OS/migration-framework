@@ -56,6 +56,12 @@ public:
 	 * \param rdma_migration Enables rdma migration.
 	 */
 	virtual void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
+	/**
+	 * \brief Method to repin vcpus of a virtual machine.
+	 *
+	 * Calls libvirt API to reassign CPUs to VCPUs.
+	 */
+	virtual void repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
 };
 
 #endif

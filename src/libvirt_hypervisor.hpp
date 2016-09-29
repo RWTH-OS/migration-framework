@@ -44,7 +44,7 @@ public:
 	 * \param vcpus The number of virtual cpus to be assigned to the vm.
 	 * \param memory The amount of ram memory to be assigned to the vm in KiB.
 	 */
-	void start(const fast::msg::migfra::Start &task, fast::msg::migfra::Time_measurement &time_measurement);
+	void start(const fast::msg::migfra::Start &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 	/**
 	 * \brief Method to stop a virtual machine.
 	 *
@@ -52,7 +52,7 @@ public:
 	 * \param vm_name The name of the vm to stop.
 	 * \param force If true the domain is destroyed, else it is shut down gracefully.
 	 */
-	void stop(const fast::msg::migfra::Stop &task, fast::msg::migfra::Time_measurement &time_measurement);
+	void stop(const fast::msg::migfra::Stop &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 	/**
 	 * \brief Method to migrate a virtual machine to another host.
 	 *
@@ -64,7 +64,13 @@ public:
 	 * \param rdma_migration Enables rdma migration.
 	 * \param time_measurement Time measurement facility.
 	 */
-	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement);
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement) override;
+	/**
+	 * \brief Method to repin vcpus of a virtual machine.
+	 *
+	 * Calls libvirt API to reassign CPUs to VCPUs.
+	 */
+	void repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 private:
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;

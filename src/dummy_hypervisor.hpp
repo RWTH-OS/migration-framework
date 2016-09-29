@@ -58,6 +58,13 @@ public:
 	 * \param rdma_migration Enables rdma migration.
 	 */
 	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement);
+	/**
+	 * \brief Method to repin vcpus of a virtual machine.
+	 *
+	 * Dummy method that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
+	 */
+	void repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 private:
 	const bool never_throw;
 };
