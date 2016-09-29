@@ -82,6 +82,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 		auto start_task = std::dynamic_pointer_cast<Start>(task);
 		auto stop_task = std::dynamic_pointer_cast<Stop>(task);
 		auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
+		auto repin_task = std::dynamic_pointer_cast<Repin>(task);
 		try {
 			time_measurement.tick("overall");
 			if (start_task) {
@@ -107,6 +108,9 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 				Pscom_handler pscom_handler(*migrate_task, comm, time_measurement);
 				// Start migration
 				hypervisor->migrate(*migrate_task, time_measurement);
+			} else if (repin_task) {
+				vm_name = repin_task->vm_name;
+				hypervisor->repin(*repin_task, time_measurement);
 			}
 		} catch (const std::exception &e) {
 			FASTLIB_LOG(migfra_task_log, warn) << "Exception in task: " << e.what();

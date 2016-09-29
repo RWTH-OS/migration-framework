@@ -35,3 +35,10 @@ void Dummy_hypervisor::migrate(const fast::msg::migfra::Migrate &task, fast::msg
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
+
+void Dummy_hypervisor::repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement)
+{
+	(void) task; (void) time_measurement;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
+}
