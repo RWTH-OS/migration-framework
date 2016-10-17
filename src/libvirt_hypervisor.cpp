@@ -30,6 +30,11 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
 // Helper functions
 //
 
+/**
+ * \brief Tries to connect to a domain via ssh in order to test if the domain is booted and ready to use.
+ *
+ * \param domain The domain to probe.
+ */
 void probe_ssh_connection(virDomainPtr domain)
 {
 	auto host = virDomainGetName(domain);
@@ -50,6 +55,14 @@ void probe_ssh_connection(virDomainPtr domain)
 	} while (!success);
 }
 
+/**
+ * \brief Get a libvirt-connection to a specific host and libvirt-driver.
+ *
+ * \param host The hostname of the connection.
+ * \param driver The libvirt-driver of the connection (e.g., qemu).
+ * \param transport The transport protocol to use (e.g., ssh or tcp for remote connections)
+ * \returns shared_ptr to a domain.
+ */
 std::shared_ptr<virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
 {
 	std::string plus_transport = (transport != "") ? ("+" + transport) : "";
@@ -64,6 +77,14 @@ std::shared_ptr<virConnect> connect(const std::string &host, const std::string &
 	return conn;
 }
 
+/**
+ * \brief Define a domain using an xml config.
+ *
+ * This function only defines the domain but does not start it.
+ * \param conn The connection used to define the domain on.
+ * \param xml The xml configuration of the domain.
+ * \returns shared_ptr to a domain.
+ */
 std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string &xml)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Define persistant domain from xml";
@@ -76,6 +97,14 @@ std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string
 	return domain;
 }
 
+/**
+ * \brief Create a domain using an xml config.
+ *
+ * This function only starts the described domain but does not define a persistent domain.
+ * \param conn The connection used to start the domain on.
+ * \param xml The xml configuration of the domain.
+ * \returns shared_ptr to a domain.
+ */
 std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain from xml";
@@ -88,6 +117,12 @@ std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string
 	return domain;
 }
 
+/**
+ * \brief Find a domain with the specified name.
+ *
+ * \param conn The connection to search the domain on.
+ * \param name The name of the domain.
+ */
 std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &name)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
@@ -100,6 +135,11 @@ std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &n
 	return domain;
 }
 
+/**
+ * \brief Start a domain.
+ *
+ * \param domain The domain to start.
+ */
 void create(virDomainPtr domain)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain.";
@@ -107,6 +147,12 @@ void create(virDomainPtr domain)
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 }
 
+/**
+ * \brief Get the state of the domain.
+ * 
+ * \param domain The domain which state is retrieved.
+ * \returns One of enum virDomainState (http://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState).
+ */
 unsigned char get_domain_state(virDomainPtr domain)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info.";
@@ -116,6 +162,9 @@ unsigned char get_domain_state(virDomainPtr domain)
 	return domain_info.state;
 }
 
+/**
+ * \brief Custom exception thrown when domain state does not suit expected state.
+ */
 struct Domain_state_error :
 	public std::runtime_error
 {
@@ -125,6 +174,12 @@ struct Domain_state_error :
 	}
 };
 
+/**
+ * \brief Check if state of a domain is as expected.
+ * 
+ * \param domain The domain to check the state of.
+ * \param expected_state The expected state with which the state of the domain is compared to.
+ */
 void check_state(virDomainPtr domain, virDomainState expected_state)
 {
 	auto state = get_domain_state(domain);
@@ -133,6 +188,14 @@ void check_state(virDomainPtr domain, virDomainState expected_state)
 		throw Domain_state_error("Wrong domain state: " + std::to_string(state));
 }
 
+/**
+ * \brief Check if state of a domain is as expected on at least one of the nodes.
+ *
+ * This function is used to check if a domain is already running on any node.
+ * \param name The name of the domain.
+ * \param nodes The nodes to look for the domain.
+ * \param expected_state The expected state with which the state of the domain is compared to.
+ */
 void check_remote_state(const std::string &name, const std::vector<std::string> &nodes, virDomainState expected_state)
 {
 	for (const auto &node : nodes) {
@@ -150,9 +213,16 @@ void check_remote_state(const std::string &name, const std::vector<std::string> 
 	}
 }
 
+/**
+ * \brief Wait until the domain is in a specific state.
+ *
+ * This function may be used to wait until a domain is activated or fully shut down.
+ * \param domain The domain to poll.
+ * \param expected_state The state to wait on.
+ * \todo Implement timeout
+ */
 void wait_for_state(virDomainPtr domain, virDomainState expected_state)
 {
-	// TODO: Implement timeout
 	while (get_domain_state(domain) != expected_state) {
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
