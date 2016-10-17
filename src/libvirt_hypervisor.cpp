@@ -311,6 +311,41 @@ bool check_free_memory(virDomainPtr domain1, virConnectPtr conn1, virDomainPtr d
 	return host1_free_memory > domain2_size && host2_free_memory > domain1_size;
 }
 
+virConnectPtr get_connect_of_domain(virDomainPtr domain)
+{
+	auto ptr = virDomainGetConnect(domain);
+	if (ptr == nullptr)
+		throw std::runtime_error(std::string("Error getting connection of domain: ") + virGetLastErrorMessage());
+	return ptr;
+}
+
+size_t get_cpumaplen(virConnectPtr conn)
+{
+	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
+	if (cpus == -1)
+		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
+	return VIR_CPU_MAPLEN(cpus);
+}
+
+void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
+{
+	std::vector<unsigned char> cpumap(maplen, 0);
+	for (auto cpu : cpus)
+		VIR_USE_CPU(cpumap, cpu);
+	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
+}
+
+void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>> &vcpu_map)
+{
+	// Get number of CPUs on node
+	auto maplen = get_cpumaplen(get_connect_of_domain(domain));
+	// Create cpumap and pin for each vcpu
+	for (unsigned int vcpu = 0; vcpu != vcpu_map.size(); ++vcpu) {
+		pin_vcpu_to_cpus(domain, vcpu, vcpu_map[vcpu], maplen);
+	}
+}
+
 //
 // Libvirt_hypervisor implementation
 //
@@ -512,42 +547,26 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		time_measurement.tick("migrate");
 		auto dest_domain = migrate_domain(domain.get(), dest_connection.get(), flags, migrate_uri);
 		time_measurement.tock("migrate");
+		// Repin
+		if (task.vcpu_map.is_valid()) {
+			time_measurement.tick("repin");
+			repin_impl(dest_domain.get(), task.vcpu_map.get());
+			time_measurement.tock("repin");
+		}
 		// Set destination domain for guards
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
 		dev_guard.set_destination_domain(dest_domain);
 	}
 }
 
-size_t get_cpumaplen(virConnectPtr conn)
-{
-	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
-	if (cpus == -1)
-		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
-	return VIR_CPU_MAPLEN(cpus);
-}
-
-void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
-{
-	std::vector<unsigned char> cpumap(maplen, 0);
-	for (auto cpu : cpus)
-		VIR_USE_CPU(cpumap, cpu);
-	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
-		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
-}
-
 void Libvirt_hypervisor::repin(const Repin &task, Time_measurement &time_measurement)
 {
 	(void) time_measurement;
-	auto &vcpu_map_vec = task.vcpu_map;
+	auto &vcpu_map = task.vcpu_map;
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	// Connect to libvirt
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	// Get number of CPUs on node
-	auto maplen = get_cpumaplen(conn.get());
-	// Create cpumap and pin for each vcpu
-	for (unsigned int vcpu = 0; vcpu != vcpu_map_vec.size(); ++vcpu) {
-		pin_vcpu_to_cpus(domain.get(), vcpu, vcpu_map_vec[vcpu], maplen);
-	}
+	repin_impl(domain.get(), vcpu_map);
 }
