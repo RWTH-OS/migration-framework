@@ -30,6 +30,11 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
 // Helper functions
 //
 
+/**
+ * \brief Tries to connect to a domain via ssh in order to test if the domain is booted and ready to use.
+ *
+ * \param domain The domain to probe.
+ */
 void probe_ssh_connection(virDomainPtr domain)
 {
 	auto host = virDomainGetName(domain);
@@ -50,6 +55,14 @@ void probe_ssh_connection(virDomainPtr domain)
 	} while (!success);
 }
 
+/**
+ * \brief Get a libvirt-connection to a specific host and libvirt-driver.
+ *
+ * \param host The hostname of the connection.
+ * \param driver The libvirt-driver of the connection (e.g., qemu).
+ * \param transport The transport protocol to use (e.g., ssh or tcp for remote connections)
+ * \returns shared_ptr to a domain.
+ */
 std::shared_ptr<virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
 {
 	std::string plus_transport = (transport != "") ? ("+" + transport) : "";
@@ -64,6 +77,14 @@ std::shared_ptr<virConnect> connect(const std::string &host, const std::string &
 	return conn;
 }
 
+/**
+ * \brief Define a domain using an xml config.
+ *
+ * This function only defines the domain but does not start it.
+ * \param conn The connection used to define the domain on.
+ * \param xml The xml configuration of the domain.
+ * \returns shared_ptr to a domain.
+ */
 std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string &xml)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Define persistant domain from xml";
@@ -76,6 +97,14 @@ std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string
 	return domain;
 }
 
+/**
+ * \brief Create a domain using an xml config.
+ *
+ * This function only starts the described domain but does not define a persistent domain.
+ * \param conn The connection used to start the domain on.
+ * \param xml The xml configuration of the domain.
+ * \returns shared_ptr to a domain.
+ */
 std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain from xml";
@@ -88,6 +117,12 @@ std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string
 	return domain;
 }
 
+/**
+ * \brief Find a domain with the specified name.
+ *
+ * \param conn The connection to search the domain on.
+ * \param name The name of the domain.
+ */
 std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &name)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain by name.";
@@ -100,6 +135,11 @@ std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &n
 	return domain;
 }
 
+/**
+ * \brief Start a domain.
+ *
+ * \param domain The domain to start.
+ */
 void create(virDomainPtr domain)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain.";
@@ -107,6 +147,12 @@ void create(virDomainPtr domain)
 		throw std::runtime_error(std::string("Error creating domain: ") + virGetLastErrorMessage());
 }
 
+/**
+ * \brief Get the state of the domain.
+ * 
+ * \param domain The domain which state is retrieved.
+ * \returns One of enum virDomainState (http://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState).
+ */
 unsigned char get_domain_state(virDomainPtr domain)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Get domain info.";
@@ -116,6 +162,9 @@ unsigned char get_domain_state(virDomainPtr domain)
 	return domain_info.state;
 }
 
+/**
+ * \brief Custom exception thrown when domain state does not suit expected state.
+ */
 struct Domain_state_error :
 	public std::runtime_error
 {
@@ -125,6 +174,12 @@ struct Domain_state_error :
 	}
 };
 
+/**
+ * \brief Check if state of a domain is as expected.
+ * 
+ * \param domain The domain to check the state of.
+ * \param expected_state The expected state with which the state of the domain is compared to.
+ */
 void check_state(virDomainPtr domain, virDomainState expected_state)
 {
 	auto state = get_domain_state(domain);
@@ -133,6 +188,14 @@ void check_state(virDomainPtr domain, virDomainState expected_state)
 		throw Domain_state_error("Wrong domain state: " + std::to_string(state));
 }
 
+/**
+ * \brief Check if state of a domain is as expected on at least one of the nodes.
+ *
+ * This function is used to check if a domain is already running on any node.
+ * \param name The name of the domain.
+ * \param nodes The nodes to look for the domain.
+ * \param expected_state The expected state with which the state of the domain is compared to.
+ */
 void check_remote_state(const std::string &name, const std::vector<std::string> &nodes, virDomainState expected_state)
 {
 	for (const auto &node : nodes) {
@@ -150,9 +213,16 @@ void check_remote_state(const std::string &name, const std::vector<std::string> 
 	}
 }
 
+/**
+ * \brief Wait until the domain is in a specific state.
+ *
+ * This function may be used to wait until a domain is activated or fully shut down.
+ * \param domain The domain to poll.
+ * \param expected_state The state to wait on.
+ * \todo Implement timeout
+ */
 void wait_for_state(virDomainPtr domain, virDomainState expected_state)
 {
-	// TODO: Implement timeout
 	while (get_domain_state(domain) != expected_state) {
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
@@ -309,6 +379,41 @@ bool check_free_memory(virDomainPtr domain1, virConnectPtr conn1, virDomainPtr d
 	auto host1_free_memory = get_free_memory(conn1);
 	auto host2_free_memory = get_free_memory(conn2);
 	return host1_free_memory > domain2_size && host2_free_memory > domain1_size;
+}
+
+virConnectPtr get_connect_of_domain(virDomainPtr domain)
+{
+	auto ptr = virDomainGetConnect(domain);
+	if (ptr == nullptr)
+		throw std::runtime_error(std::string("Error getting connection of domain: ") + virGetLastErrorMessage());
+	return ptr;
+}
+
+size_t get_cpumaplen(virConnectPtr conn)
+{
+	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
+	if (cpus == -1)
+		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
+	return VIR_CPU_MAPLEN(cpus);
+}
+
+void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
+{
+	std::vector<unsigned char> cpumap(maplen, 0);
+	for (auto cpu : cpus)
+		VIR_USE_CPU(cpumap, cpu);
+	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
+}
+
+void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>> &vcpu_map)
+{
+	// Get number of CPUs on node
+	auto maplen = get_cpumaplen(get_connect_of_domain(domain));
+	// Create cpumap and pin for each vcpu
+	for (unsigned int vcpu = 0; vcpu != vcpu_map.size(); ++vcpu) {
+		pin_vcpu_to_cpus(domain, vcpu, vcpu_map[vcpu], maplen);
+	}
 }
 
 //
@@ -512,42 +617,26 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		time_measurement.tick("migrate");
 		auto dest_domain = migrate_domain(domain.get(), dest_connection.get(), flags, migrate_uri);
 		time_measurement.tock("migrate");
+		// Repin
+		if (task.vcpu_map.is_valid()) {
+			time_measurement.tick("repin");
+			repin_impl(dest_domain.get(), task.vcpu_map.get());
+			time_measurement.tock("repin");
+		}
 		// Set destination domain for guards
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Set destination domain for guards.";
 		dev_guard.set_destination_domain(dest_domain);
 	}
 }
 
-size_t get_cpumaplen(virConnectPtr conn)
-{
-	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
-	if (cpus == -1)
-		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
-	return VIR_CPU_MAPLEN(cpus);
-}
-
-void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
-{
-	std::vector<unsigned char> cpumap(maplen, 0);
-	for (auto cpu : cpus)
-		VIR_USE_CPU(cpumap, cpu);
-	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
-		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
-}
-
 void Libvirt_hypervisor::repin(const Repin &task, Time_measurement &time_measurement)
 {
 	(void) time_measurement;
-	auto &vcpu_map_vec = task.vcpu_map;
+	auto &vcpu_map = task.vcpu_map;
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	// Connect to libvirt
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	// Get number of CPUs on node
-	auto maplen = get_cpumaplen(conn.get());
-	// Create cpumap and pin for each vcpu
-	for (unsigned int vcpu = 0; vcpu != vcpu_map_vec.size(); ++vcpu) {
-		pin_vcpu_to_cpus(domain.get(), vcpu, vcpu_map_vec[vcpu], maplen);
-	}
+	repin_impl(domain.get(), vcpu_map);
 }
