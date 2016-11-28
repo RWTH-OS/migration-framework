@@ -71,6 +71,19 @@ public:
 	 * Calls libvirt API to reassign CPUs to VCPUs.
 	 */
 	void repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement) override;
+	/**
+	 * \brief Method to suspend the execution of a virtual machine.
+	 *
+	 * Calls libvirt API to suspend a domain.
+	 */
+	void suspend(const fast::msg::migfra::Suspend &task, fast::msg::migfra::Time_measurement &time_measurement) override;
+	/**
+	 * \brief Method to resume the execution of a virtual machine.
+	 *
+	 * Calls libvirt API to resume a domain.
+	 */
+	void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) override;
+
 private:
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;

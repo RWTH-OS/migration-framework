@@ -62,6 +62,18 @@ public:
 	 * Calls libvirt API to reassign CPUs to VCPUs.
 	 */
 	virtual void repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
+	/**
+	 * \brief Method to suspend the execution of a virtual machine.
+	 *
+	 * A pure virtual method to provide an interface for suspending the execution of a virtual machine.
+	 */
+	virtual void suspend(const fast::msg::migfra::Suspend &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
+	/**
+	 * \brief Method to resume the execution of a virtual machine.
+	 *
+	 * A pure virtual method to provide an interface for resuming the execution of a virtual machine.
+	 */
+	virtual void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
 };
 
 #endif
