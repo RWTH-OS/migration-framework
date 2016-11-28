@@ -66,7 +66,6 @@ ExternalProject_Add(
 ExternalProject_Get_Property(libssh install_dir)
 include_directories(SYSTEM "${install_dir}/include")
 list(APPEND LIBS "${install_dir}/lib/libssh.so")
-list(APPEND LIBS_BENCHMARK "${install_dir}/lib/libssh.so")
 #add_definitions(-DLIBSSH_STATIC=1)
 
 
@@ -91,12 +90,7 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/utility.cpp
 )
-set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp
-	${PROJECT_SOURCE_DIR}/src/task.cpp
-	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
-	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
-	${PROJECT_SOURCE_DIR}/src/utility.cpp
-)
+set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp)
 
 ### Add config files
 # Doxygen documentation generation
