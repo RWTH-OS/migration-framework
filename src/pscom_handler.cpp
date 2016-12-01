@@ -53,19 +53,18 @@ Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 	request_topic(std::regex_replace(request_topic_template, std::regex(R"((<vm_name>))"), vm_name)),
 	response_topic(std::regex_replace(response_topic_template, std::regex(R"((<vm_name>))"), vm_name))
 {
-	// Autodetect pscom process count if messages_expected equals 0
+	// Autodetect pscom process count if pscom_hook_procs is auto
 	if (task.pscom_hook_procs.is_valid()) {
 		if (task.pscom_hook_procs.get() == "auto") {
 			messages_expected = pscom_process_auto_detection(vm_name);
-		}
-	} else {
-		try {
-			messages_expected = std::stoul(task.pscom_hook_procs.get());
-		} catch (const std::exception &e) {
-			throw std::runtime_error("pscom-hook-procs is malformed: " + std::string(e.what()));
+		} else {
+			try {
+				messages_expected = std::stoul(task.pscom_hook_procs.get());
+			} catch (const std::exception &e) {
+				throw std::runtime_error("pscom-hook-procs is malformed: " + std::string(e.what()));
+			}
 		}
 	}
-
 
 	if (messages_expected > 0) {
 		if (!(this->comm = std::dynamic_pointer_cast<fast::MQTT_communicator>(comm)))

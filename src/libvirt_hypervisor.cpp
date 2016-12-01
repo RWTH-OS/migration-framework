@@ -261,11 +261,18 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 				+ ".");
 }
 
-void suspend(virDomainPtr domain)
+void suspend_impl(virDomainPtr domain)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Suspend domain.";
 	if (virDomainSuspend(domain) == -1)
 		throw std::runtime_error(std::string("Error suspending domain: ") + virGetLastErrorMessage());
+}
+
+void resume_impl(virDomainPtr domain)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Resume domain.";
+	if (virDomainResume(domain) == -1)
+		throw std::runtime_error(std::string("Error resuming domain: ") + virGetLastErrorMessage());
 }
 
 void destroy(virDomainPtr domain)
@@ -552,7 +559,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 			// Suspend vm1
 			time_measurement.tick("downtime-" + name1);
 			time_measurement.tick("suspend-" + name1);
-			suspend(domain1.get());
+			suspend_impl(domain1.get());
 			// Take snapshot of vm1.
 			auto snapshot = create_snapshot(domain1.get());
 			// destroy vm1
@@ -648,3 +655,27 @@ void Libvirt_hypervisor::repin(const Repin &task, Time_measurement &time_measure
 	auto domain = find_by_name(conn.get(), task.vm_name);
 	repin_impl(domain.get(), vcpu_map);
 }
+
+void Libvirt_hypervisor::suspend(const fast::msg::migfra::Suspend &task, fast::msg::migfra::Time_measurement &time_measurement)
+{
+	(void) time_measurement;
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	// Connect to libvirt
+	auto conn = connect("", driver);
+	// Get domain by name
+	auto domain = find_by_name(conn.get(), task.vm_name);
+	suspend_impl(domain.get());
+}
+
+void Libvirt_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement)
+{
+	(void) time_measurement;
+	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
+	// Connect to libvirt
+	auto conn = connect("", driver);
+	// Get domain by name
+	auto domain = find_by_name(conn.get(), task.vm_name);
+	resume_impl(domain.get());
+}
+
+

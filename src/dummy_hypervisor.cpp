@@ -42,3 +42,17 @@ void Dummy_hypervisor::repin(const fast::msg::migfra::Repin &task, fast::msg::mi
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
+
+void Dummy_hypervisor::suspend(const fast::msg::migfra::Suspend &task, fast::msg::migfra::Time_measurement &time_measurement)
+{
+	(void) task; (void) time_measurement;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
+}
+
+void Dummy_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement)
+{
+	(void) task; (void) time_measurement;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
+}
