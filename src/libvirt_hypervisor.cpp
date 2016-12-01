@@ -21,6 +21,7 @@
 #include <thread>
 #include <future>
 #include <chrono>
+#include <mutex>
 
 using namespace fast::msg::migfra;
 
@@ -511,7 +512,6 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	}
 }
 
-// TODO: Thread based approach
 void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
 	const std::string &dest_hostname = task.dest_hostname;
@@ -582,21 +582,29 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 			// Set destination domain for guard
 			dev_guard1.set_destination_domain(dest_domain1);
 		} else {
-			// TODO: time_measurement must be thread safe for concurrent migration with time tracking
 			time_measurement.tick("migrate");
-			auto mig_func = [rdma_migration, flags](const std::string &hostname, virDomainPtr domain, virConnectPtr destconn, Migrate_devices_guard &dev_guard)
+			std::mutex time_measurement_mutex;
+			auto mig_func = [rdma_migration, flags, &time_measurement, &time_measurement_mutex](const std::string &hostname, virDomainPtr domain, virConnectPtr destconn, Migrate_devices_guard &dev_guard, const std::string &name)
 			{
 				// Create migrateuri
 				std::string migrate_uri = get_migrate_uri(rdma_migration, hostname);
+				{
+					std::lock_guard<std::mutex> lock(time_measurement_mutex);
+					time_measurement.tick("migrate-" + name);
+				}
 				// Migrate
-				//time_measurement.tick("migrate-" + name1);
 				auto dest_domain = migrate_domain(domain, destconn, flags, migrate_uri);
-				//time_measurement.tock("migrate-" + name1);
+				{
+					std::lock_guard<std::mutex> lock(time_measurement_mutex);
+					time_measurement.tock("migrate-" + name);
+				}
 				// Set destination domain for guard
 				dev_guard.set_destination_domain(dest_domain);
 			};
-			auto mig1 = std::async(std::launch::async, [&](){mig_func(hostname2, domain1.get(), conn2.get(), dev_guard1);});
-			auto mig2 = std::async(std::launch::async, [&](){mig_func(hostname1, domain2.get(), conn1.get(), dev_guard2);});
+			{
+				auto mig1 = std::async(std::launch::async, [&](){mig_func(hostname2, domain1.get(), conn2.get(), dev_guard1, name1);});
+				auto mig2 = std::async(std::launch::async, [&](){mig_func(hostname1, domain2.get(), conn1.get(), dev_guard2, name2);});
+			}
 			time_measurement.tock("migrate");
 		}
 	} else {
