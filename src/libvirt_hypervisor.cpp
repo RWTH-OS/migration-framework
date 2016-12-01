@@ -19,7 +19,9 @@
 #include <stdexcept>
 #include <memory>
 #include <thread>
+#include <future>
 #include <chrono>
+#include <mutex>
 
 using namespace fast::msg::migfra;
 
@@ -379,13 +381,13 @@ unsigned long long get_free_memory(virConnectPtr conn)
 	return memory;
 }
 
-bool check_free_memory(virDomainPtr domain1, virConnectPtr conn1, virDomainPtr domain2, virConnectPtr conn2)
+bool check_snapshot_required(virDomainPtr domain1, virConnectPtr conn1, virDomainPtr domain2, virConnectPtr conn2)
 {
 	auto domain1_size = get_memory_size(domain1);
 	auto domain2_size = get_memory_size(domain2);
 	auto host1_free_memory = get_free_memory(conn1);
 	auto host2_free_memory = get_free_memory(conn2);
-	return host1_free_memory > domain2_size && host2_free_memory > domain1_size;
+	return host1_free_memory < domain2_size || host2_free_memory < domain1_size;
 }
 
 virConnectPtr get_connect_of_domain(virDomainPtr domain)
@@ -517,7 +519,6 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	}
 }
 
-// TODO: Thread based approach
 void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
 {
 	const std::string &dest_hostname = task.dest_hostname;
@@ -548,12 +549,11 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		check_state(domain1.get(), VIR_DOMAIN_RUNNING);
 		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
 		// Compare size and swap if necessary
-		bool with_snapshot = !check_free_memory(domain1.get(), conn1.get(), domain2.get(), conn2.get());
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
 		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement, name1);
 		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement, name2);
-		if (with_snapshot) {
+		if (check_snapshot_required(domain1.get(), conn1.get(), domain2.get(), conn2.get())) {
 			// TODO: RAII handler for snapshot for better error recovery
 			sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
 			// Suspend vm1
@@ -589,22 +589,30 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 			// Set destination domain for guard
 			dev_guard1.set_destination_domain(dest_domain1);
 		} else {
-			// Create migrateuri for vm1
-			std::string migrate_uri1 = get_migrate_uri(rdma_migration, hostname2);
-			// Migrate vm1
-			time_measurement.tick("migrate-" + name1);
-			auto dest_domain1 = migrate_domain(domain1.get(), conn2.get(), flags, migrate_uri1);
-			time_measurement.tock("migrate-" + name1);
-			// Set destination domain for guard of vm1
-			dev_guard1.set_destination_domain(dest_domain1);
-			// Create migrateuri for vm2
-			std::string migrate_uri2 = get_migrate_uri(rdma_migration, hostname1);
-			// Migrate vm2
-			time_measurement.tick("migrate-" + name2);
-			auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags, migrate_uri2);
-			time_measurement.tock("migrate-" + name2);
-			// Set destination domain for guard of vm2
-			dev_guard2.set_destination_domain(dest_domain2);
+			time_measurement.tick("migrate");
+			std::mutex time_measurement_mutex;
+			auto mig_func = [rdma_migration, flags, &time_measurement, &time_measurement_mutex](const std::string &hostname, virDomainPtr domain, virConnectPtr destconn, Migrate_devices_guard &dev_guard, const std::string &name)
+			{
+				// Create migrateuri
+				std::string migrate_uri = get_migrate_uri(rdma_migration, hostname);
+				{
+					std::lock_guard<std::mutex> lock(time_measurement_mutex);
+					time_measurement.tick("migrate-" + name);
+				}
+				// Migrate
+				auto dest_domain = migrate_domain(domain, destconn, flags, migrate_uri);
+				{
+					std::lock_guard<std::mutex> lock(time_measurement_mutex);
+					time_measurement.tock("migrate-" + name);
+				}
+				// Set destination domain for guard
+				dev_guard.set_destination_domain(dest_domain);
+			};
+			{
+				auto mig1 = std::async(std::launch::async, [&](){mig_func(hostname2, domain1.get(), conn2.get(), dev_guard1, name1);});
+				auto mig2 = std::async(std::launch::async, [&](){mig_func(hostname1, domain2.get(), conn1.get(), dev_guard2, name2);});
+			}
+			time_measurement.tock("migrate");
 		}
 	} else {
 		// Connect to libvirt
