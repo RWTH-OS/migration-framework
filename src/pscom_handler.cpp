@@ -19,8 +19,8 @@ unsigned int pscom_process_auto_detection(const std::string &vm_name)
 {
 			ssh::Session session;
 			session.setOption(SSH_OPTIONS_HOST, vm_name.c_str());
-			auto channel(std::make_shared<ssh::Channel>(session));
 			try {
+				ssh::Channel *channel = new ssh::Channel(session);
 				FASTLIB_LOG(pscom_handler_log, trace) << "Connect to " << vm_name << " and determine pscom procs.";
 				session.connect();
 				session.userauthPublickeyAuto();
@@ -35,6 +35,7 @@ unsigned int pscom_process_auto_detection(const std::string &vm_name)
 				unsigned int messages_expected = std::stoi(res);
 				FASTLIB_LOG(pscom_handler_log, debug) << "Determined " << messages_expected << " running pscom processes.";
 				channel->close();
+				delete channel;
 				session.disconnect();
 				return messages_expected;
 			} catch (const std::exception &e) {
