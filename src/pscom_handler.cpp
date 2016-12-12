@@ -120,7 +120,7 @@ void Pscom_handler::suspend()
 		// wait for termination
 		for (answers = 0; answers != messages_expected; ++answers)
 			comm->get_message(response_topic, std::chrono::seconds(10));
-		time_measurement.tock("pscom-resume");
+		time_measurement.tock("pscom-suspend");
 	}
 }
 
