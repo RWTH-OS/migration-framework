@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <regex>
 
-#include <libssh/libsshpp.hpp>
+#include <libssh/libssh.h>
 #include <fast-lib/log.hpp>
 
 #define EXEC_BUF_SIZE 64
@@ -15,31 +15,68 @@ int Pscom_handler::qos = 0;
 FASTLIB_LOG_INIT(pscom_handler_log, "Pscom_handler")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(pscom_handler_log, trace);
 
-unsigned int pscom_process_auto_detection(const std::string &vm_name)
-{
-			ssh::Session session;
-			session.setOption(SSH_OPTIONS_HOST, vm_name.c_str());
-			auto channel(std::make_shared<ssh::Channel>(session));
-			try {
-				FASTLIB_LOG(pscom_handler_log, trace) << "Connect to " << vm_name << " and determine pscom procs.";
-				session.connect();
-				session.userauthPublickeyAuto();
-				channel->openSession();
-				channel->requestExec("/opt/parastation/bin/psiadmin -d -c 'l p -1' | perl -n -a -e 'print if /^ / and $F[5] >= 0' | wc -l");
-				char res[EXEC_BUF_SIZE];
-				for (unsigned int bytes_read = -1, total_bytes = 0;
-						(bytes_read != 0) && (total_bytes <= EXEC_BUF_SIZE);
-						total_bytes += bytes_read) {
-					bytes_read = channel->read(static_cast<char*>(res+total_bytes), sizeof(res)-total_bytes);
-				}
-				unsigned int messages_expected = std::stoi(res);
-				FASTLIB_LOG(pscom_handler_log, debug) << "Determined " << messages_expected << " running pscom processes.";
-				channel->close();
-				session.disconnect();
-				return messages_expected;
-			} catch (const std::exception &e) {
-				throw std::runtime_error("Exception while connecting with SSH: " + std::string(e.what()));
+std::array<std::string, 2> test_commands = {
+	"/opt/parastation/bin/psiadmin -d -c 'l p -1' | perl -n -a -e 'print if /^ / and $F[5] >= 0' | wc -l", 	// psid processes
+	"/usr/bin/pgrep -P `/usr/bin/pgrep hydra_pmi_proxy` |wc -l" 						// hydra processes
+};
+unsigned int pscom_process_auto_detection(const std::string &vm_name) {
+	try {
+		ssh_session session;
+		ssh_channel channel;
+		if ((session = ssh_new()) == NULL) {
+			throw std::runtime_error(
+			    "Failed to create SSH sesseion");
+		}
+		ssh_options_set(session, SSH_OPTIONS_HOST, vm_name.c_str());
+		FASTLIB_LOG(pscom_handler_log, trace) << "Connect to " << vm_name << " and determine pscom procs.";
+		ssh_connect(session);
+		ssh_userauth_publickey_auto(session, NULL, NULL);
+
+		unsigned int messages_expected = 0;
+		for (const std::string &cmd : test_commands) {
+			if ((channel = ssh_channel_new(session)) == NULL) {
+				throw std::runtime_error(
+				    "Failed to create SSH channel");
 			}
+			if (ssh_channel_open_session(channel) != SSH_OK) {
+				throw std::runtime_error(
+				    "Failed to open SSH session to: " +
+				    vm_name);
+				//	throw
+			}
+			if (ssh_channel_request_exec(channel, cmd.c_str()) !=
+			    SSH_OK) {
+				throw std::runtime_error(
+				    "Failed to execute command via SSH: " +
+				    cmd);
+			}
+			char res[EXEC_BUF_SIZE];
+			for (unsigned int bytes_read = -1, total_bytes = 0;
+			     (bytes_read != 0) &&
+			     (total_bytes <= EXEC_BUF_SIZE);
+			     total_bytes += bytes_read) {
+				bytes_read = ssh_channel_read_timeout(
+				    channel,
+				    static_cast<char *>(res + total_bytes),
+				    sizeof(res) - total_bytes, false, -1);
+			}
+			messages_expected = std::stoi(res);
+			ssh_channel_send_eof(channel);
+			ssh_channel_close(channel);
+			ssh_channel_free(channel);
+			if (messages_expected > 0) {
+				break;
+			}
+		}
+		FASTLIB_LOG(pscom_handler_log, debug) << "Determined " << messages_expected << " running pscom processes.";
+		ssh_disconnect(session);
+		ssh_free(session);
+		return messages_expected;
+	} catch (const std::exception &e) {
+		throw std::runtime_error(
+		    "Exception while connecting with SSH: " +
+		    std::string(e.what()));
+	}
 }
 
 Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
@@ -120,7 +157,7 @@ void Pscom_handler::suspend()
 		// wait for termination
 		for (answers = 0; answers != messages_expected; ++answers)
 			comm->get_message(response_topic, std::chrono::seconds(10));
-		time_measurement.tock("pscom-resume");
+		time_measurement.tock("pscom-suspend");
 	}
 }
 
