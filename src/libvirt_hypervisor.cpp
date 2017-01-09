@@ -38,12 +38,13 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
  *
  * \param domain The domain to probe.
  */
-void probe_ssh_connection(virDomainPtr domain)
+void probe_ssh_connection(virDomainPtr domain, const std::chrono::duration<double> &timeout)
 {
 	auto host = virDomainGetName(domain);
 	ssh::Session session;
 	session.setOption(SSH_OPTIONS_HOST, host);
 	bool success = false;
+	auto start = std::chrono::high_resolution_clock::now();
 	do {
 		try {
 			FASTLIB_LOG(libvirt_hyp_log, trace) << "Try to connect to domain with SSH.";
@@ -55,6 +56,8 @@ void probe_ssh_connection(virDomainPtr domain)
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 		session.disconnect();
+		if (!success && std::chrono::high_resolution_clock::now() - start > timeout)
+			throw std::runtime_error("Timeout while trying to reach domain with SSH.");
 	} while (!success);
 }
 
@@ -224,9 +227,12 @@ void check_remote_state(const std::string &name, const std::vector<std::string> 
  * \param expected_state The state to wait on.
  * \todo Implement timeout
  */
-void wait_for_state(virDomainPtr domain, virDomainState expected_state)
+void wait_for_state(virDomainPtr domain, virDomainState expected_state, const std::chrono::duration<double> timeout)
 {
+	auto start = std::chrono::high_resolution_clock::now();
 	while (get_domain_state(domain) != expected_state) {
+		if (std::chrono::high_resolution_clock::now() - start > timeout)
+			throw std::runtime_error("Timeout while waiting for correct vm state.");
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
 }
@@ -438,11 +444,13 @@ void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>
 // Libvirt_hypervisor implementation
 //
 
-Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport) :
+Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport, unsigned int start_timeout, unsigned int stop_timeout) :
 	pci_device_handler(std::make_shared<PCI_device_handler>()),
 	nodes(std::move(nodes)),
 	default_driver(std::move(default_driver)),
-	default_transport(std::move(default_transport))
+	default_transport(std::move(default_transport)),
+	start_timeout(start_timeout),
+	stop_timeout(stop_timeout)
 {
 }
 
@@ -503,7 +511,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
 	// Wait for domain to boot
-	probe_ssh_connection(domain.get());
+	probe_ssh_connection(domain.get(), std::chrono::seconds(start_timeout));
 }
 
 void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measurement)
@@ -533,7 +541,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	// Wait until domain is shut down
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
 	try {
-		wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF);
+		wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF, std::chrono::seconds(stop_timeout));
 	} catch (const std::runtime_error &e) {
 		auto libvirt_error = virGetLastError();
 		if (!libvirt_error || persistent || (libvirt_error->code != VIR_ERR_NO_DOMAIN))

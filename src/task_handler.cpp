@@ -126,7 +126,13 @@ void Task_handler::load(const YAML::Node &node)
 			std::string default_transport = "ssh";
 			if (hypervisor_node["transport"])
 				default_transport = hypervisor_node["transport"].as<decltype(default_transport)>();
-			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes), default_driver, default_transport);
+			unsigned int default_start_timeout = 60;
+			if (hypervisor_node["start-timeout"])
+				default_start_timeout = hypervisor_node["start-timeout"].as<decltype(default_start_timeout)>();
+			unsigned int default_stop_timeout = 60;
+			if (hypervisor_node["stop-timeout"])
+				default_stop_timeout = hypervisor_node["stop-timeout"].as<decltype(default_stop_timeout)>();
+			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes), default_driver, default_transport, default_start_timeout, default_stop_timeout);
 		} else if (type == "dummy") {
 			if (!hypervisor_node["never-throw"])
 				throw std::invalid_argument("Defective configuration for dummy hypervisor.");
