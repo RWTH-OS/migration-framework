@@ -10,6 +10,7 @@
 
 #include "pci_device_handler.hpp"
 #include "utility.hpp"
+#include "ivshmem_handler.hpp"
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
@@ -446,8 +447,14 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	// Get domain
 	std::shared_ptr<virDomain> domain;
 	if (task.xml.is_valid()) {
+		std::string xml = task.xml.get();
+		if (task.ivshmem.is_valid()) {
+			auto &ivshmem = task.ivshmem.get();
+			std::string path = ivshmem.path.is_valid() ? ivshmem.path.get() : "/tmp/" + ivshmem.id;
+			xml = add_ivshmem_dev(xml, ivshmem.id, ivshmem.size, path);
+		}
 		// Define domain from XML
-		domain = define_from_xml(conn.get(), task.xml);
+		domain = define_from_xml(conn.get(), xml);
 	} else if (task.vm_name.is_valid()) {
 		// Find existing domain
 		domain = find_by_name(conn.get(), task.vm_name);
