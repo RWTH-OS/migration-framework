@@ -95,10 +95,13 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 					auto xml = start_task->xml.get();
 					std::smatch match;
 					auto found = std::regex_search(xml, match, regex);
-					if (found && match.size() == 2)
+					if (found && match.size() == 2) {
 						vm_name = match[1].str();
-					else
+						start_task->vm_name = vm_name;
+					} else {
 						vm_name = xml;
+						throw std::runtime_error("Could not find vm-name in xml.");
+					}
 				}
 				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
