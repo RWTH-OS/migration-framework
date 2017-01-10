@@ -64,7 +64,7 @@ public:
 	 * \param rdma_migration Enables rdma migration.
 	 * \param time_measurement Time measurement facility.
 	 */
-	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement) override;
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
 	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *

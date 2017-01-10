@@ -22,7 +22,8 @@ class Pscom_handler
 public:
 	Pscom_handler(const fast::msg::migfra::Migrate &task,
 		      std::shared_ptr<fast::Communicator> comm,
-		      fast::msg::migfra::Time_measurement &time_measurement);
+		      fast::msg::migfra::Time_measurement &time_measurement,
+		      bool second_domain_swap = false);
 	~Pscom_handler() noexcept(false);
 
 	/**

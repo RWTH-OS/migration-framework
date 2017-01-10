@@ -8,6 +8,7 @@
 
 #include "libvirt_hypervisor.hpp"
 
+#include "pscom_handler.hpp"
 #include "pci_device_handler.hpp"
 #include "utility.hpp"
 #include "ivshmem_handler.hpp"
@@ -555,7 +556,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	}
 }
 
-void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
+void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm)
 {
 	const std::string &dest_hostname = task.dest_hostname;
 	auto migration_type = task.migration_type.is_valid() ? task.migration_type.get() : "warm";
@@ -574,7 +575,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// Get domains
 		// domain1 is snapshot-migrated, domain2 is migrated as defined by migration-type
 		auto name1 = task.vm_name;
-		auto name2 = task.swap_with.get();
+		auto name2 = task.swap_with.get().vm_name;
 		auto hostname1 = get_hostname();
 		auto hostname2 = dest_hostname;
 		auto conn1 = connect(hostname1, driver, transport);
@@ -584,11 +585,14 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// Check if domains are in running state
 		check_state(domain1.get(), VIR_DOMAIN_RUNNING);
 		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
-		// Compare size and swap if necessary
+		// Suspend pscom (resume in destructor)
+		Pscom_handler pscom_handler1(task, comm, time_measurement, false);
+		Pscom_handler pscom_handler2(task, comm, time_measurement, true);
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
 		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement, name1);
 		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement, name2);
+		// Compare size and snapshot-swap if necessary
 		if (check_snapshot_required(domain1.get(), conn1.get(), domain2.get(), conn2.get())) {
 			// TODO: RAII handler for snapshot for better error recovery
 			sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
@@ -657,6 +661,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		auto domain = find_by_name(conn.get(), task.vm_name);
 		// Check if domain is in running state
 		check_state(domain.get(), VIR_DOMAIN_RUNNING);
+		// Suspend pscom (resume in destructor)
+		Pscom_handler pscom_handler(task, comm, time_measurement);
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
 		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);

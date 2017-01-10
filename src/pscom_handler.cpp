@@ -81,8 +81,9 @@ unsigned int pscom_process_auto_detection(const std::string &vm_name) {
 
 Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 			     std::shared_ptr<fast::Communicator> comm,
-			     fast::msg::migfra::Time_measurement &time_measurement) :
-	vm_name(task.vm_name),
+			     fast::msg::migfra::Time_measurement &time_measurement,
+			     bool second_domain_swap) :
+	vm_name(second_domain_swap ? task.swap_with.get().vm_name : task.vm_name),
 	messages_expected_auto(false),
 	messages_expected(0),
 	answers(0),
@@ -90,18 +91,21 @@ Pscom_handler::Pscom_handler(const fast::msg::migfra::Migrate &task,
 	request_topic(std::regex_replace(request_topic_template, std::regex(R"((<vm_name>))"), vm_name)),
 	response_topic(std::regex_replace(response_topic_template, std::regex(R"((<vm_name>))"), vm_name))
 {
-	// Autodetect pscom process count if pscom_hook_procs is auto
-	if (task.pscom_hook_procs.is_valid()) {
-		if (task.pscom_hook_procs.get() == "auto") {
-			messages_expected = pscom_process_auto_detection(vm_name);
-		} else {
-			try {
-				messages_expected = std::stoul(task.pscom_hook_procs.get());
-			} catch (const std::exception &e) {
-				throw std::runtime_error("pscom-hook-procs is malformed: " + std::string(e.what()));
+	// Autodetect pscom process count if pscom_hook_procs is auto (sets messages_expected)
+	[&](const fast::Optional<std::string> &pscom_hook_procs) {
+		if (pscom_hook_procs.is_valid()) {
+			if (pscom_hook_procs.get() == "auto") {
+				messages_expected = pscom_process_auto_detection(vm_name);
+			} else {
+				try {
+					messages_expected = std::stoul(pscom_hook_procs.get());
+				} catch (const std::exception &e) {
+					throw std::runtime_error("pscom-hook-procs is malformed: " + std::string(e.what()));
+				}
 			}
 		}
-	}
+	}(second_domain_swap ? task.swap_with.get().pscom_hook_procs : task.pscom_hook_procs);
+
 
 	if (messages_expected > 0) {
 		if (!(this->comm = std::dynamic_pointer_cast<fast::MQTT_communicator>(comm)))
@@ -150,14 +154,14 @@ void Pscom_handler::set_qos(int qos)
 void Pscom_handler::suspend()
 {
 	if (messages_expected > 0) {
-		time_measurement.tick("pscom-suspend");
+		time_measurement.tick("pscom-suspend-" + vm_name);
 		std::string msg = "*";
 		// publish suspend request
 		comm->send_message(msg, request_topic, qos);
 		// wait for termination
 		for (answers = 0; answers != messages_expected; ++answers)
 			comm->get_message(response_topic, std::chrono::seconds(10));
-		time_measurement.tock("pscom-suspend");
+		time_measurement.tock("pscom-suspend-" + vm_name);
 	}
 }
 
@@ -165,7 +169,7 @@ void Pscom_handler::resume()
 {
 	// only try to resume if pscom is suspended
 	if (answers == messages_expected && messages_expected > 0) {
-		time_measurement.tick("pscom-resume");
+		time_measurement.tick("pscom-resume-" + vm_name);
 		std::string msg = "*";
 		// publish resume request
 		comm->send_message(msg, request_topic, qos);
@@ -174,6 +178,6 @@ void Pscom_handler::resume()
 			comm->get_message(response_topic, std::chrono::seconds(10));
 		// reset answers counter
 		answers = 0;
-		time_measurement.tock("pscom-resume");
+		time_measurement.tock("pscom-resume-" + vm_name);
 	}
 }

@@ -12,6 +12,7 @@
 #include <fast-lib/message/migfra/task.hpp>
 #include <fast-lib/message/migfra/pci_id.hpp>
 #include <fast-lib/message/migfra/time_measurement.hpp>
+#include <fast-lib/communicator.hpp>
 using PCI_id = fast::msg::migfra::PCI_id;
 using Time_measurement = fast::msg::migfra::Time_measurement;
 
@@ -55,7 +56,7 @@ public:
 	 * \param live_migration Enables live migration.
 	 * \param rdma_migration Enables rdma migration.
 	 */
-	virtual void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
+	virtual void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) = 0;
 	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *

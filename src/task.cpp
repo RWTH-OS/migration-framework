@@ -109,10 +109,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 				hypervisor->stop(*stop_task, time_measurement);
 			} else if (migrate_task) {
 				vm_name = migrate_task->vm_name;
-				// Suspend pscom (resume in destructor)
-				Pscom_handler pscom_handler(*migrate_task, comm, time_measurement);
-				// Start migration
-				hypervisor->migrate(*migrate_task, time_measurement);
+				hypervisor->migrate(*migrate_task, time_measurement, comm);
 			} else if (repin_task) {
 				vm_name = repin_task->vm_name;
 				hypervisor->repin(*repin_task, time_measurement);

@@ -57,7 +57,7 @@ public:
 	 * \param live_migration Enables live migration.
 	 * \param rdma_migration Enables rdma migration.
 	 */
-	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement);
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm);
 	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *
