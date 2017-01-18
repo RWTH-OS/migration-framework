@@ -95,10 +95,13 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 					auto xml = start_task->xml.get();
 					std::smatch match;
 					auto found = std::regex_search(xml, match, regex);
-					if (found && match.size() == 2)
+					if (found && match.size() == 2) {
 						vm_name = match[1].str();
-					else
+						start_task->vm_name = vm_name;
+					} else {
 						vm_name = xml;
+						throw std::runtime_error("Could not find vm-name in xml.");
+					}
 				}
 				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
@@ -106,10 +109,7 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 				hypervisor->stop(*stop_task, time_measurement);
 			} else if (migrate_task) {
 				vm_name = migrate_task->vm_name;
-				// Suspend pscom (resume in destructor)
-				Pscom_handler pscom_handler(*migrate_task, comm, time_measurement);
-				// Start migration
-				hypervisor->migrate(*migrate_task, time_measurement);
+				hypervisor->migrate(*migrate_task, time_measurement, comm);
 			} else if (repin_task) {
 				vm_name = repin_task->vm_name;
 				hypervisor->repin(*repin_task, time_measurement);

@@ -35,7 +35,7 @@ public:
 	 * Establishes an connection to qemu on the local host.
 	 * \param nodes Defines the nodes to look for already running virtual machines.
 	 */
-	Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport);
+	Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport, unsigned int start_timeout, unsigned int stop_timeout);
 	/**
 	 * \brief Method to start a virtual machine.
 	 *
@@ -64,7 +64,7 @@ public:
 	 * \param rdma_migration Enables rdma migration.
 	 * \param time_measurement Time measurement facility.
 	 */
-	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement) override;
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
 	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *
@@ -89,6 +89,8 @@ private:
 	std::vector<std::string> nodes;
 	std::string default_driver;
 	std::string default_transport;
+	unsigned int start_timeout;
+	unsigned int stop_timeout;
 };
 
 #endif

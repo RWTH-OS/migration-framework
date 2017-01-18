@@ -8,6 +8,7 @@
 
 #include "libvirt_hypervisor.hpp"
 
+#include "pscom_handler.hpp"
 #include "pci_device_handler.hpp"
 #include "utility.hpp"
 #include "ivshmem_handler.hpp"
@@ -38,12 +39,13 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
  *
  * \param domain The domain to probe.
  */
-void probe_ssh_connection(virDomainPtr domain)
+void probe_ssh_connection(virDomainPtr domain, const std::chrono::duration<double> &timeout)
 {
 	auto host = virDomainGetName(domain);
 	ssh::Session session;
 	session.setOption(SSH_OPTIONS_HOST, host);
 	bool success = false;
+	auto start = std::chrono::high_resolution_clock::now();
 	do {
 		try {
 			FASTLIB_LOG(libvirt_hyp_log, trace) << "Try to connect to domain with SSH.";
@@ -55,6 +57,8 @@ void probe_ssh_connection(virDomainPtr domain)
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 		session.disconnect();
+		if (!success && std::chrono::high_resolution_clock::now() - start > timeout)
+			throw std::runtime_error("Timeout while trying to reach domain with SSH.");
 	} while (!success);
 }
 
@@ -108,11 +112,11 @@ std::shared_ptr<virDomain> define_from_xml(virConnectPtr conn, const std::string
  * \param xml The xml configuration of the domain.
  * \returns shared_ptr to a domain.
  */
-std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string &xml)
+std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string &xml, bool paused = false)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domain from xml";
 	std::shared_ptr<virDomain> domain(
-			virDomainCreateXML(conn, xml.c_str(), VIR_DOMAIN_NONE),
+			virDomainCreateXML(conn, xml.c_str(), paused ? VIR_DOMAIN_START_PAUSED : VIR_DOMAIN_NONE),
 			Deleter_virDomain()
 	);
 	if (!domain)
@@ -224,11 +228,22 @@ void check_remote_state(const std::string &name, const std::vector<std::string> 
  * \param expected_state The state to wait on.
  * \todo Implement timeout
  */
-void wait_for_state(virDomainPtr domain, virDomainState expected_state)
+void wait_for_state(virDomainPtr domain, virDomainState expected_state, const std::chrono::duration<double> timeout)
 {
+	auto start = std::chrono::high_resolution_clock::now();
 	while (get_domain_state(domain) != expected_state) {
+		if (std::chrono::high_resolution_clock::now() - start > timeout)
+			throw std::runtime_error("Timeout while waiting for correct vm state.");
 		std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
+}
+
+bool is_persistent(virDomainPtr domain)
+{
+	auto ret = virDomainIsPersistent(domain);
+	if (ret == -1)
+		throw std::runtime_error(std::string("Error checking if domain is persistent: ") + virGetLastErrorMessage());
+	return ret;
 }
 
 void set_memory(virDomainPtr domain, unsigned long memory)
@@ -430,11 +445,13 @@ void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>
 // Libvirt_hypervisor implementation
 //
 
-Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport) :
+Libvirt_hypervisor::Libvirt_hypervisor(std::vector<std::string> nodes, std::string default_driver, std::string default_transport, unsigned int start_timeout, unsigned int stop_timeout) :
 	pci_device_handler(std::make_shared<PCI_device_handler>()),
 	nodes(std::move(nodes)),
 	default_driver(std::move(default_driver)),
-	default_transport(std::move(default_transport))
+	default_transport(std::move(default_transport)),
+	start_timeout(start_timeout),
+	stop_timeout(stop_timeout)
 {
 }
 
@@ -444,6 +461,11 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	// Connect to libvirt to libvirt
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	auto conn = connect("", driver);
+	// Check if domain already running on a remote host
+	if (!task.vm_name.is_valid())
+		throw std::runtime_error("vm-name is not valid.");
+	auto vm_name = task.vm_name.get();
+	check_remote_state(vm_name, nodes, VIR_DOMAIN_SHUTOFF);
 	// Get domain
 	std::shared_ptr<virDomain> domain;
 	if (task.xml.is_valid()) {
@@ -453,22 +475,19 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 			std::string path = ivshmem.path.is_valid() ? ivshmem.path.get() : "/tmp/" + ivshmem.id;
 			xml = add_ivshmem_dev(xml, ivshmem.id, ivshmem.size, path);
 		}
-		// Define domain from XML
-		domain = define_from_xml(conn.get(), xml);
-	} else if (task.vm_name.is_valid()) {
+		// Define domain from XML (or start paused if transient)
+		if (task.transient.is_valid() && task.transient.get())
+			domain = create_from_xml(conn.get(), xml, true);
+		else
+			domain = define_from_xml(conn.get(), xml);
+	} else {
+		if (task.transient.is_valid() && task.transient.get())
+			throw std::runtime_error("XML description is missing which is required to create a transient domain.");
 		// Find existing domain
 		domain = find_by_name(conn.get(), task.vm_name);
 		// Get domain info + check if in shutdown state
 		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
-	} else {
-		throw std::runtime_error("Neither vm-name nor xml is specified in start task.");
 	}
-	// Check if domain already running on a remote host
-	auto name_cstr = virDomainGetName(domain.get());
-	if (!name_cstr)
-		throw std::runtime_error("Cannot get domain name.");
-	auto name = std::string(name_cstr);
-	check_remote_state(name, nodes, VIR_DOMAIN_SHUTOFF);
 	// Set memory
 	if (task.memory.is_valid()) {
 		// TODO: Add separat max memory option
@@ -481,8 +500,11 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		set_max_vcpus(domain.get(), task.vcpus);
 		set_vcpus(domain.get(), task.vcpus);
 	}
-	// Start domain
-	create(domain.get());
+	// Start domain (or resume if transient)
+	if (task.transient.is_valid() && task.transient.get())
+		resume_impl(domain.get());
+	else
+		create(domain.get());
 	// Attach devices
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_ids.size() << " devices.";
 	for (auto &pci_id : task.pci_ids) {
@@ -490,7 +512,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
 	// Wait for domain to boot
-	probe_ssh_connection(domain.get());
+	probe_ssh_connection(domain.get(), std::chrono::seconds(start_timeout));
 }
 
 void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measurement)
@@ -505,10 +527,12 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	);
 	// Get domain info + check if in running state
 	check_state(domain.get(), VIR_DOMAIN_RUNNING);
+	// Check if domain is persistent
+	auto persistent = is_persistent(domain.get());
 	// Detach PCI devices
 	pci_device_handler->detach(domain.get());
 	// Destroy or shutdown domain
-	if (task.force.is_valid()) {
+	if (task.force.is_valid() && task.force.get()) {
 		if (virDomainDestroy(domain.get()) == -1)
 			throw std::runtime_error("Error destroying domain.");
 	} else {
@@ -517,16 +541,22 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	}
 	// Wait until domain is shut down
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
-	wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF);
+	try {
+		wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF, std::chrono::seconds(stop_timeout));
+	} catch (const std::runtime_error &e) {
+		auto libvirt_error = virGetLastError();
+		if (!libvirt_error || persistent || (libvirt_error->code != VIR_ERR_NO_DOMAIN))
+			throw e;
+	}
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
 	// Undefine if requested
-	if (task.undefine.is_valid()) {
+	if (task.undefine.is_valid() && task.undefine.get()) {
 		if (virDomainUndefine(domain.get()) == -1)
 			throw std::runtime_error("Error undefining domain.");
 	}
 }
 
-void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement)
+void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm)
 {
 	const std::string &dest_hostname = task.dest_hostname;
 	auto migration_type = task.migration_type.is_valid() ? task.migration_type.get() : "warm";
@@ -545,7 +575,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// Get domains
 		// domain1 is snapshot-migrated, domain2 is migrated as defined by migration-type
 		auto name1 = task.vm_name;
-		auto name2 = task.swap_with.get();
+		auto name2 = task.swap_with.get().vm_name;
 		auto hostname1 = get_hostname();
 		auto hostname2 = dest_hostname;
 		auto conn1 = connect(hostname1, driver, transport);
@@ -555,11 +585,14 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// Check if domains are in running state
 		check_state(domain1.get(), VIR_DOMAIN_RUNNING);
 		check_state(domain2.get(), VIR_DOMAIN_RUNNING);
-		// Compare size and swap if necessary
+		// Suspend pscom (resume in destructor)
+		Pscom_handler pscom_handler1(task, comm, time_measurement, false);
+		Pscom_handler pscom_handler2(task, comm, time_measurement, true);
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
 		Migrate_devices_guard dev_guard1(pci_device_handler, domain1, time_measurement, name1);
 		Migrate_devices_guard dev_guard2(pci_device_handler, domain2, time_measurement, name2);
+		// Compare size and snapshot-swap if necessary
 		if (check_snapshot_required(domain1.get(), conn1.get(), domain2.get(), conn2.get())) {
 			// TODO: RAII handler for snapshot for better error recovery
 			sort_domains_by_size(domain1, name1, conn1, hostname1, domain2, name2, conn2, hostname2);
@@ -628,6 +661,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		auto domain = find_by_name(conn.get(), task.vm_name);
 		// Check if domain is in running state
 		check_state(domain.get(), VIR_DOMAIN_RUNNING);
+		// Suspend pscom (resume in destructor)
+		Pscom_handler pscom_handler(task, comm, time_measurement);
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
 		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
