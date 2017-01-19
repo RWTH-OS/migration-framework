@@ -29,6 +29,8 @@ using namespace fast::msg::migfra;
 
 FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
+FASTLIB_LOG_INIT(repin_guard_log, "Repin_guard")
+FASTLIB_LOG_SET_LEVEL_GLOBAL(repin_guard_log, trace);
 
 //
 // Helper functions
@@ -471,8 +473,10 @@ Repin_guard::Repin_guard(std::shared_ptr<virDomain> domain,
 {
 	if (this->tag_postfix != "")
 		this->tag_postfix = "-" + this->tag_postfix;
-	if (vcpu_map.is_valid())
+	if (vcpu_map.is_valid()) {
+		FASTLIB_LOG(repin_guard_log, trace) << "Setting paused-after-migration flag for repinning.";
 		flags |= VIR_MIGRATE_PAUSED;
+	}
 }
 
 Repin_guard::~Repin_guard() noexcept(false)
@@ -482,7 +486,7 @@ Repin_guard::~Repin_guard() noexcept(false)
 	} catch (...) {
 		// Only log exception when unwinding stack, else rethrow exception.
 		if (std::uncaught_exception())
-			FASTLIB_LOG(libvirt_hyp_log, trace) << "Exception while repinning/resuming.";
+			FASTLIB_LOG(repin_guard_log, trace) << "Exception while repinning/resuming.";
 		else
 			throw;
 	}
@@ -498,8 +502,10 @@ void Repin_guard::repin()
 {
 	if (vcpu_map.is_valid()) {
 		time_measurement.tick("repin" + tag_postfix);
-		if (!std::uncaught_exception())
+		if (!std::uncaught_exception()) {
+			FASTLIB_LOG(repin_guard_log, trace) << "Repin vcpus.";
 			repin_impl(domain.get(), vcpu_map.get());
+		}
 		resume_impl(domain.get());
 		time_measurement.tock("repin" + tag_postfix);
 	}
@@ -647,6 +653,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		auto domain_swap = find_by_name(conn_swap.get(), name_swap);
 		auto flags = base_flags;
 		auto flags_swap = base_flags;
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Swap with " << name_swap << ".";
 		// Check if domains are in running state
 		check_state(domain.get(), VIR_DOMAIN_RUNNING);
 		check_state(domain_swap.get(), VIR_DOMAIN_RUNNING);
@@ -663,10 +670,11 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		Repin_guard repin_guard_swap(domain_swap, flags_swap, task.swap_with.get().vcpu_map, time_measurement, name_swap);
 		// Compare size and snapshot-swap if necessary
 		if (check_snapshot_required(domain.get(), conn.get(), domain_swap.get(), conn_swap.get())) {
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using snapshot.";
 			// TODO: RAII handler for snapshot for better error recovery
 			// TODO: Move to dedicated function
-			auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) dev_guard1, decltype(repin_guard) repin_guard1, 
-					decltype(domain) domain2, decltype(name) name2, decltype(conn) conn2, decltype(flags) flags2, decltype(dev_guard) dev_guard2, decltype(repin_guard) repin_guard2)
+			auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(repin_guard) &repin_guard1, 
+					decltype(domain) domain2, decltype(name) name2, decltype(conn) conn2, decltype(flags) flags2, decltype(dev_guard) &dev_guard2, decltype(repin_guard) &repin_guard2)
 			{
 				// Suspend vm1
 				time_measurement.tick("downtime-" + name1);
@@ -706,6 +714,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 			else
 				func(domain_swap, name_swap, conn_swap, hostname_swap, flags_swap, dev_guard_swap, repin_guard_swap, domain, name, conn, flags, dev_guard, repin_guard);
 		} else {
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using parallel migration.";
 			time_measurement.tick("migrate");
 			std::mutex time_measurement_mutex;
 			auto mig_func = [=, &time_measurement, &time_measurement_mutex](const std::string &hostname, virDomainPtr domain, virConnectPtr destconn, unsigned long flags, Migrate_devices_guard &dev_guard, Repin_guard &repin_guard, const std::string &name)
