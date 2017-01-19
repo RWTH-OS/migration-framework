@@ -298,10 +298,10 @@ void destroy(virDomainPtr domain)
 		throw std::runtime_error(std::string("Error destroying domain: ") + virGetLastErrorMessage());
 }
 
-void delete_snapshot(virDomainSnapshotPtr snapshot)
+void delete_snapshot(virDomainSnapshotPtr snapshot, bool metadata_only = false)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Delete snapshot.";
-	if (virDomainSnapshotDelete(snapshot, 0) == -1)
+	if (virDomainSnapshotDelete(snapshot, metadata_only ? VIR_DOMAIN_SNAPSHOT_DELETE_METADATA_ONLY : 0) == -1)
 		throw std::runtime_error(std::string("Error deleting snapshot: ") + virGetLastErrorMessage());
 }
 
@@ -312,7 +312,7 @@ void revert_to_snapshot(virDomainSnapshotPtr snapshot, bool paused)
 		throw std::runtime_error(std::string("Error reverting snapshot: ") + virGetLastErrorMessage());
 }
 
-std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain)
+std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain, bool halt)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create snapshot";
 	std::shared_ptr<virDomainSnapshot> snapshot(
@@ -320,7 +320,7 @@ std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain)
 "<domainsnapshot><description>Snapshot for migration</description>\
 	<memory snapshot='internal'/>\
 </domainsnapshot>"
-			, 0),
+			, halt ? VIR_DOMAIN_SNAPSHOT_CREATE_HALT : 0),
 			Deleter_virDomainSnapshot()
 	);
 	if (!snapshot)
@@ -671,11 +671,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 				// Suspend vm1
 				time_measurement.tick("downtime-" + name1);
 				time_measurement.tick("suspend-" + name1);
-				//suspend_impl(domain1.get());
-				// Take snapshot of vm1.
-				auto snapshot = create_snapshot(domain1.get());
-				// destroy vm1
-				//destroy(domain1.get());
+				// Take snapshot of vm1 and halt.
+				auto snapshot = create_snapshot(domain1.get(), true);
 				time_measurement.tock("suspend-" + name1);
 				// Create migrateuri for vm2
 				std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
@@ -688,11 +685,12 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 				dev_guard2.set_destination_domain(dest_domain2);
 				// Get snapshotted domain on dest
 				time_measurement.tick("resume-" + name1);
+				// TODO: handle transient domains
 				auto dest_domain1 = find_by_name(conn2.get(), name1);
 				// Redefine snapshot on remote
 				auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
 				// Remove snapshot from src
-				delete_snapshot(snapshot.get());
+				delete_snapshot(snapshot.get(), true);
 				// Revert to snapshot (paused if repin is required)
 				revert_to_snapshot(dest_snapshot.get(), flags1 & VIR_MIGRATE_PAUSED);
 				time_measurement.tock("resume-" + name1);
