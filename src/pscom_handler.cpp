@@ -155,7 +155,7 @@ void Pscom_handler::suspend()
 {
 	if (messages_expected > 0) {
 		time_measurement.tick("pscom-suspend-" + vm_name);
-		std::string msg = "*";
+		std::string msg = "suspend";
 		// publish suspend request
 		comm->send_message(msg, request_topic, qos);
 		// wait for termination
@@ -170,7 +170,7 @@ void Pscom_handler::resume()
 	// only try to resume if pscom is suspended
 	if (answers == messages_expected && messages_expected > 0) {
 		time_measurement.tick("pscom-resume-" + vm_name);
-		std::string msg = "*";
+		std::string msg = "resume";
 		// publish resume request
 		comm->send_message(msg, request_topic, qos);
 		// wait for termination
