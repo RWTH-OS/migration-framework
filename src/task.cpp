@@ -105,7 +105,12 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 				}
 				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
-				vm_name = stop_task->vm_name;
+				if (stop_task->vm_name)
+					vm_name = *stop_task->vm_name;
+				else if (stop_task->regex)
+					vm_name = *stop_task->regex;
+				else
+					throw std::runtime_error("Neither vm-name or regex is defined in stop task.");
 				hypervisor->stop(*stop_task, time_measurement);
 			} else if (migrate_task) {
 				vm_name = migrate_task->vm_name;
