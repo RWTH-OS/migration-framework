@@ -1,0 +1,6 @@
+---
+task: stop vm
+list:
+  - regex: centos\d+
+    force: false
+...

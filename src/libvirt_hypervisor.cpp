@@ -24,6 +24,7 @@
 #include <future>
 #include <chrono>
 #include <mutex>
+#include <regex>
 
 using namespace fast::msg::migfra;
 
@@ -84,6 +85,31 @@ std::shared_ptr<virConnect> connect(const std::string &host, const std::string &
 	if (!conn)
 		throw std::runtime_error("Failed to connect to libvirt with uri: " + uri);
 	return conn;
+}
+
+std::string get_domain_name(virDomainPtr domain)
+{
+	auto ret = virDomainGetName(domain);
+	if (!ret)
+		throw std::runtime_error(std::string("Error getting name of domain.") + virGetLastErrorMessage());
+	return std::string(ret);
+
+}
+
+std::vector<std::string> get_active_domain_names(virConnectPtr conn)
+{
+	virDomainPtr *domains;
+	auto num = virConnectListAllDomains(conn, &domains, VIR_CONNECT_LIST_DOMAINS_ACTIVE);
+	if (num < 0)
+		throw std::runtime_error(std::string("Error getting list of active domains.") + virGetLastErrorMessage());
+	std::vector<std::string> vm_names;
+	vm_names.reserve(num);
+	for (int i = 0; i != num; ++i) {
+		vm_names.push_back(get_domain_name(domains[i])); // possible memory leak if get_domain_name throws :(
+		virDomainFree(domains[i]);
+	}
+	free(domains);
+	return vm_names;
 }
 
 /**
@@ -540,9 +566,9 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	std::shared_ptr<virDomain> domain;
 	if (task.xml.is_valid()) {
 		std::string xml = task.xml.get();
-		if (task.ivshmem.is_valid()) {
-			auto &ivshmem = task.ivshmem.get();
-			std::string path = ivshmem.path.is_valid() ? ivshmem.path.get() : "/tmp/" + ivshmem.id;
+		if (task.ivshmem) {
+			auto &ivshmem = *task.ivshmem;
+			std::string path = ivshmem.path ? *ivshmem.path : "/tmp/" + ivshmem.id;
 			xml = add_ivshmem_dev(xml, ivshmem.id, ivshmem.size, path);
 		}
 		// Define domain from XML (or start paused if transient)
@@ -554,7 +580,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		if (task.transient.is_valid() && task.transient.get())
 			throw std::runtime_error("XML description is missing which is required to create a transient domain.");
 		// Find existing domain
-		domain = find_by_name(conn.get(), task.vm_name);
+		domain = find_by_name(conn.get(), *task.vm_name);
 		// Get domain info + check if in shutdown state
 		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
 	}
@@ -590,39 +616,59 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 	(void) time_measurement;
 	// Connect to libvirt to libvirt
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
-	auto conn = connect("", driver);
-	// Get domain by name
-	std::shared_ptr<virDomain> domain(
-		find_by_name(conn.get(), task.vm_name)
-	);
-	// Get domain info + check if in running state
-	check_state(domain.get(), VIR_DOMAIN_RUNNING);
-	// Check if domain is persistent
-	auto persistent = is_persistent(domain.get());
-	// Detach PCI devices
-	pci_device_handler->detach(domain.get());
-	// Destroy or shutdown domain
-	if (task.force.is_valid() && task.force.get()) {
-		if (virDomainDestroy(domain.get()) == -1)
-			throw std::runtime_error("Error destroying domain.");
+	auto func = [&](const std::string &vm_name){
+		auto conn = connect("", driver);
+		// Get domain by name
+		std::shared_ptr<virDomain> domain(
+			find_by_name(conn.get(), vm_name)
+		);
+		// Get domain info + check if in running state
+		check_state(domain.get(), VIR_DOMAIN_RUNNING);
+		// Check if domain is persistent
+		auto persistent = is_persistent(domain.get());
+		// Detach PCI devices
+		pci_device_handler->detach(domain.get());
+		// Destroy or shutdown domain
+		if (task.force.is_valid() && task.force.get()) {
+			if (virDomainDestroy(domain.get()) == -1)
+				throw std::runtime_error("Error destroying domain.");
+		} else {
+			if (virDomainShutdown(domain.get()) == -1)
+				throw std::runtime_error("Error shutting domain down.");
+		}
+		// Wait until domain is shut down
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
+		try {
+			wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF, std::chrono::seconds(stop_timeout));
+		} catch (const std::runtime_error &e) {
+			auto libvirt_error = virGetLastError();
+			if (!libvirt_error || persistent || (libvirt_error->code != VIR_ERR_NO_DOMAIN))
+				throw e;
+		}
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
+		// Undefine if requested
+		if (task.undefine && *task.undefine) {
+			if (virDomainUndefine(domain.get()) == -1)
+				throw std::runtime_error("Error undefining domain.");
+		}
+	};
+	if (task.vm_name) {
+		func(*task.vm_name);
+	} else if (task.regex) {
+		auto conn = connect("", driver);
+		auto vm_names = get_active_domain_names(conn.get());
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Using regex: " << *task.regex << ".";
+		std::regex regex(*task.regex);
+		std::vector<std::future<void>> handles;
+		for (auto &vm_name : vm_names) {
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Checking vm_name: " << vm_name << ".";
+			if (std::regex_match(vm_name, regex)) {
+				FASTLIB_LOG(libvirt_hyp_log, trace) << vm_name << " is a match.";
+				handles.push_back(std::async(std::launch::async, func, vm_name));
+			}
+		}
 	} else {
-		if (virDomainShutdown(domain.get()) == -1)
-			throw std::runtime_error("Error shutting domain down.");
-	}
-	// Wait until domain is shut down
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait until domain is shut down.";
-	try {
-		wait_for_state(domain.get(), VIR_DOMAIN_SHUTOFF, std::chrono::seconds(stop_timeout));
-	} catch (const std::runtime_error &e) {
-		auto libvirt_error = virGetLastError();
-		if (!libvirt_error || persistent || (libvirt_error->code != VIR_ERR_NO_DOMAIN))
-			throw e;
-	}
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is shut down.";
-	// Undefine if requested
-	if (task.undefine.is_valid() && task.undefine.get()) {
-		if (virDomainUndefine(domain.get()) == -1)
-			throw std::runtime_error("Error undefining domain.");
+		throw std::runtime_error("Error: Either vm-name or regex must be defined in stop task.");
 	}
 }
 
