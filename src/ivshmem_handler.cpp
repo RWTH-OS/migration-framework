@@ -5,6 +5,7 @@
 
 std::string add_ivshmem_dev(const std::string &xml, const std::string &id, const std::string &size, const std::string &path)
 {
+	/*
 	std::string snippet_template = "\
 <qemu:commandline>\n\
 	<qemu:arg value='-chardev'/>\n\
@@ -13,12 +14,22 @@ std::string add_ivshmem_dev(const std::string &xml, const std::string &id, const
 	<qemu:arg value='ivshmem,chardev=@id,size=@size'/>\n\
 </qemu:commandline>\n\
 	";
+	*/
+	std::string snippet_template = "\
+<shmem name='@id'>\n\
+	<model type='ivshmem-plain'/>\n\
+	<size unit='M'>@size</size>\n\
+	<alias name='@id'/>\n\
+</shmem>\n\
+	";
+	// TODO: Add unit option
 	auto snippet = std::regex_replace(snippet_template, std::regex(R"((@id))"), id);
 	snippet = std::regex_replace(snippet, std::regex(R"((@path))"), path);
 	snippet = std::regex_replace(snippet, std::regex(R"((@size))"), size);
 	std::cout << snippet << std::endl;
 
-	auto xml_ret = std::regex_replace(xml, std::regex(R"((</domain>))"), snippet + "</domain>");
+//	auto xml_ret = std::regex_replace(xml, std::regex(R"((</domain>))"), snippet + "</domain>");
+	auto xml_ret = std::regex_replace(xml, std::regex(R"((</devices>))"), snippet + "</devices>");
 	std::cout << xml_ret << std::endl;
 
 	

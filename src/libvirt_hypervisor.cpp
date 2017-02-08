@@ -566,9 +566,9 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	std::shared_ptr<virDomain> domain;
 	if (task.xml.is_valid()) {
 		std::string xml = task.xml.get();
-		if (task.ivshmem.is_valid()) {
-			auto &ivshmem = task.ivshmem.get();
-			std::string path = ivshmem.path.is_valid() ? ivshmem.path.get() : "/tmp/" + ivshmem.id;
+		if (task.ivshmem) {
+			auto &ivshmem = *task.ivshmem;
+			std::string path = ivshmem.path ? *ivshmem.path : "/tmp/" + ivshmem.id;
 			xml = add_ivshmem_dev(xml, ivshmem.id, ivshmem.size, path);
 		}
 		// Define domain from XML (or start paused if transient)
