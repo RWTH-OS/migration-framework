@@ -1,0 +1,8 @@
+---
+task: migrate vm
+vm-name: vm-name-placeholder
+destination: destination-placeholder
+parameter:
+  migration-type: warm
+  rdma-migration: rdma-migration-placeholder
+...

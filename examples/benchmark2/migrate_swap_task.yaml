@@ -1,0 +1,10 @@
+---
+task: migrate vm
+vm-name: vm-name-a-placeholder
+destination: destination-placeholder
+parameter:
+  migration-type: warm
+  rdma-migration: rdma-migration-placeholder
+  swap-with: 
+    vm-name: vm-name-b-placeholder
+...
