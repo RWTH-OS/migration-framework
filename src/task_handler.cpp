@@ -10,6 +10,7 @@
 
 #include "libvirt_hypervisor.hpp"
 #include "dummy_hypervisor.hpp"
+#include "ponci_hypervisor.hpp"
 #include "task.hpp"
 #include "pscom_handler.hpp"
 #include "utility.hpp"
@@ -30,7 +31,7 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(migfra_task_handler_log, trace);
 
 using Task_container = fast::msg::migfra::Task_container;
 
-Task_handler::Task_handler(const std::string &config_file) : 
+Task_handler::Task_handler(const std::string &config_file) :
 	running(true)
 {
 	// Convert config file to string
@@ -58,7 +59,7 @@ void Task_handler::loop()
 		std::string msg;
 		try {
 			msg = comm->get_message();
-			Task_container task_cont;	
+			Task_container task_cont;
 			task_cont.from_string(msg);
 			execute(task_cont, hypervisor, comm);
 		} catch (const YAML::Exception &e) {
@@ -95,7 +96,7 @@ void Task_handler::load(const YAML::Node &node)
 			throw std::invalid_argument("No type for communication interface in configuration found.");
 		auto type = comm_node["type"].as<std::string>();
 		if (type == "mqtt") {
-			if (!comm_node["id"] || !comm_node["subscribe-topic"] || !comm_node["publish-topic"] 
+			if (!comm_node["id"] || !comm_node["subscribe-topic"] || !comm_node["publish-topic"]
 					|| !comm_node["host"] || !comm_node["port"] || !comm_node["keepalive"])
 				throw std::invalid_argument("Defective configuration for mqtt communicator.");
 			comm = std::make_shared<fast::MQTT_communicator>(

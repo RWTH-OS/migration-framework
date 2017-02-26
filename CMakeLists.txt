@@ -58,7 +58,6 @@ list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
 
 
 # libponci
-include(ExternalProject)
 ExternalProject_Add(
 	libponci
 	GIT_REPOSITORY https://github.com/lrr-tum/libponci.git
@@ -99,6 +98,7 @@ endif()
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
+	${PROJECT_SOURCE_DIR}/src/ponci_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/dummy_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
@@ -134,7 +134,7 @@ configure_file(
 # Add executable
 add_executable(migfra ${SRC})
 add_executable(migfra_benchmark ${SRC_BENCHMARK})
-add_dependencies(migfra fastlib libssh)
-add_dependencies(migfra_benchmark fastlib)
+add_dependencies(migfra fastlib libssh libponci)
+add_dependencies(migfra_benchmark fastlib libponci)
 target_link_libraries(migfra ${LIBS})
 target_link_libraries(migfra_benchmark ${LIBS_BENCHMARK})
