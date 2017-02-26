@@ -133,6 +133,8 @@ void Task_handler::load(const YAML::Node &node)
 			if (hypervisor_node["stop-timeout"])
 				default_stop_timeout = hypervisor_node["stop-timeout"].as<decltype(default_stop_timeout)>();
 			hypervisor = std::make_shared<Libvirt_hypervisor>(std::move(nodes), default_driver, default_transport, default_start_timeout, default_stop_timeout);
+		} else if (type == "ponci") {
+			hypervisor = std::make_shared<Ponci_hypervisor>();
 		} else if (type == "dummy") {
 			if (!hypervisor_node["never-throw"])
 				throw std::invalid_argument("Defective configuration for dummy hypervisor.");

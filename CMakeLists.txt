@@ -56,6 +56,21 @@ set(FASTLIB "${install_dir}/lib/libfastlib.a")
 list(APPEND LIBS "${FASTLIB}" "-lrt")
 list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
 
+
+# libponci
+include(ExternalProject)
+ExternalProject_Add(
+	libponci
+	GIT_REPOSITORY https://github.com/lrr-tum/libponci.git
+	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+)
+ExternalProject_Get_Property(libponci install_dir)
+include_directories("${install_dir}/include")
+set(LIBPONCI "${install_dir}/lib/libponci.a")
+list(APPEND LIBS "${LIBPONCI}")
+list(APPEND LIBS_BENCHMARK "${LIBPONCI}")
+
 # libssh
 ExternalProject_Add(
 	libssh
