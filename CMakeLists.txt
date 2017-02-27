@@ -44,8 +44,8 @@ list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs
 include(ExternalProject)
 ExternalProject_Add(
 	fastlib
-	GIT_REPOSITORY https://github.com/spickartz/fast-lib.git
-	GIT_TAG sp/memnode-map
+	GIT_REPOSITORY https://github.com/fast-project/fast-lib.git
+	GIT_TAG v0.4.0
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=${ENABLE_LOGGING} -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
