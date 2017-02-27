@@ -36,7 +36,7 @@ public:
 	/**
 	 * \brief Method not supported.
 	 */
-	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm);
+	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
 	/**
 	 * \brief Method to set cpus of a cgroup.
 	 */
