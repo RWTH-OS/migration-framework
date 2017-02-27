@@ -18,6 +18,18 @@ void Ponci_hypervisor::start(const fast::msg::migfra::Start &task, fast::msg::mi
 	std::string cgroup_name = task.vm_name.get();
 	try {
 		cgroup_create(cgroup_name);
+		if (task.memnode_map.is_valid()) {
+			auto &memnode_map = task.memnode_map;
+
+			// Check if more than one map is provided
+			if (memnode_map.size() != 1)
+				throw std::runtime_error("Ponci_hypervisor only supports one dimensional memnode maps.");
+
+			// Add cpus to cgroup
+			std::vector<size_t> memnodes(memnode_map[0].begin(), memnode_map[0].end());
+			cgroup_set_mems(cgroup_name, memnodes);
+		}
+
 	} catch (const std::exception &e) {
 	        throw std::runtime_error(
 	            "Exception while creating cgroup: " +
