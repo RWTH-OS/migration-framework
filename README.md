@@ -22,7 +22,7 @@ Allows for initiating start, stop, and migration of virtual machines by means of
 ### Build instructions
 ```bash
 mkdir build && cd build
-cmake ..
+cmake -DLibVirt_INCLUDE_DIR=<path/to/libvirt/include> -DLibVirt_LIBRARY=<path/to/libvirt.so> ..
 make
 ```
 
