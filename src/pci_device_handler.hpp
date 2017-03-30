@@ -93,8 +93,11 @@ private:
 	std::unique_ptr<const Device_cache> device_cache;	
 };
 
-// RAII-guard to detach devices in constructor and reattach in destructor.
-// If no error occures during migration the domain on destination should be set.
+/**
+ * \brief RAII-guard to detach devices in constructor and reattach in destructor.
+ * 
+ * If no error occures during migration the domain on destination should be set.
+ */
 class Migrate_devices_guard
 {
 public:
@@ -104,6 +107,7 @@ public:
 	void set_destination_domain(std::shared_ptr<virDomain> dest_domain);
 private:
 	void reattach();
+
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::shared_ptr<virDomain> domain;
 	std::unordered_map<PCI_id, size_t> detached_types_counts;

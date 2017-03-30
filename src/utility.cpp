@@ -15,6 +15,14 @@ std::string convert_and_free_cstr(char *cstr)
 	return str;
 }
 
+std::string get_domain_xml(virDomainPtr domain)
+{
+	auto xml_str = convert_and_free_cstr(virDomainGetXMLDesc(domain, 0));
+	if (xml_str == "")
+		throw std::runtime_error("Error getting xml description.");
+	return xml_str;
+}
+
 Memory_stats::Memory_stats(virDomainPtr domain) :
 	domain(domain)
 {
