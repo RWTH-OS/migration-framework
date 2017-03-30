@@ -45,7 +45,7 @@ include(ExternalProject)
 ExternalProject_Add(
 	fastlib
 	GIT_REPOSITORY https://github.com/fast-project/fast-lib.git
-	GIT_TAG v0.3.2
+	GIT_TAG v0.4.0
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=${ENABLE_LOGGING} -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
@@ -55,6 +55,20 @@ include_directories(SYSTEM "${install_dir}/include/fast-lib/external")
 set(FASTLIB "${install_dir}/lib/libfastlib.a")
 list(APPEND LIBS "${FASTLIB}" "-lrt")
 list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
+
+
+# libponci
+ExternalProject_Add(
+	libponci
+	GIT_REPOSITORY https://github.com/lrr-tum/libponci.git
+	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+)
+ExternalProject_Get_Property(libponci install_dir)
+include_directories("${install_dir}/include")
+set(LIBPONCI "${install_dir}/lib/libponci.a")
+list(APPEND LIBS "${LIBPONCI}")
+list(APPEND LIBS_BENCHMARK "${LIBPONCI}")
 
 # libssh
 ExternalProject_Add(
@@ -84,6 +98,7 @@ endif()
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
+	${PROJECT_SOURCE_DIR}/src/ponci_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/dummy_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
@@ -119,7 +134,7 @@ configure_file(
 # Add executable
 add_executable(migfra ${SRC})
 add_executable(migfra_benchmark ${SRC_BENCHMARK})
-add_dependencies(migfra fastlib libssh)
-add_dependencies(migfra_benchmark fastlib)
+add_dependencies(migfra fastlib libssh libponci)
+add_dependencies(migfra_benchmark fastlib libponci)
 target_link_libraries(migfra ${LIBS})
 target_link_libraries(migfra_benchmark ${LIBS_BENCHMARK})

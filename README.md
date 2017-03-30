@@ -7,7 +7,7 @@ Version 3, 29 June 2007. For details see 'LICENSE.md' in the root directory.
 -->
 
 # migration-framework
-[![Build Status](https://travis-ci.org/fast-project/migration-framework.svg?branch=master)](https://travis-ci.org/fast-project/migration-framework)
+[![Build Status](https://travis-ci.org/RWTH-OS/migration-framework.svg?branch=master)](https://travis-ci.org/RWTH-OS/migration-framework)
 
 Allows for initiating start, stop, and migration of virtual machines by means of MQTT messages.
 
@@ -22,7 +22,7 @@ Allows for initiating start, stop, and migration of virtual machines by means of
 ### Build instructions
 ```bash
 mkdir build && cd build
-cmake ..
+cmake -DLibVirt_INCLUDE_DIR=<path/to/libvirt/include> -DLibVirt_LIBRARY=<path/to/libvirt.so> ..
 make
 ```
 
