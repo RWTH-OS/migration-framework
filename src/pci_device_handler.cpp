@@ -9,6 +9,7 @@
 #include "pci_device_handler.hpp"
 
 #include "utility.hpp"
+#include "device_utility.hpp"
 
 #include <fast-lib/log.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -21,60 +22,6 @@
 
 FASTLIB_LOG_INIT(pcidev_handler_log, "PCI_device_handler")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(pcidev_handler_log, trace);
-
-// Some deleter to be used with smart pointers.
-
-struct Deleter_virNodeDevice
-{
-	void operator()(virNodeDevicePtr ptr) const
-	{
-		virNodeDeviceFree(ptr);
-	}
-};
-
-// Wraps ugly passing of C style array of raw pointers to returning vector of smart pointers.
-std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node_devices_wrapper(virConnectPtr conn, unsigned int flags)
-{
-	virNodeDevicePtr *devices_carray = nullptr;
-	auto ret = virConnectListAllNodeDevices(conn, &devices_carray, flags);
-	if (ret < 0) // Libvirt error
-		throw std::runtime_error("Error collecting list of node devices.");
-	std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> devices_vec(devices_carray, devices_carray + ret);
-	if (devices_carray)
-		free(devices_carray);
-	return devices_vec;
-}
-
-// Converts integer type numbers to string in hex format.
-template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr> 
-std::string to_hex_string(const T &integer, int digits, bool show_base = true)
-{
-	std::stringstream ss;
-	ss << (show_base ? "0x" : "") << std::hex << std::setfill('0') << std::setw(digits) << +integer;
-	return ss.str();
-}
-
-// Convert xml string to ptree.
-boost::property_tree::ptree read_xml_from_string(const std::string &str)
-{
-	boost::property_tree::ptree pt;
-	std::stringstream ss(str);
-	read_xml(ss, pt, boost::property_tree::xml_parser::trim_whitespace);
-	return pt;
-}
-
-// Convert ptree to xml string.
-std::string write_xml_to_string(const boost::property_tree::ptree &ptree, bool pretty = true)
-{
-	std::stringstream ss;
-	if (pretty) {
-		boost::property_tree::xml_parser::xml_writer_settings<std::string> settings('\t', 1);
-		write_xml(ss, ptree, settings);
-	} else {
-		write_xml(ss, ptree);
-	}
-	return ss.str();
-}
 
 //
 // PCI_id implementation
@@ -323,8 +270,7 @@ std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domai
 	// Parse domain xml to get all attached hostdevs.
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Parse domain xml to get all attached hostdevs.";
 	// TODO: Consider reusing hostdev xml descriptions instead of generating later from cached devices.
-	auto domain_xml = convert_and_free_cstr(virDomainGetXMLDesc(domain, 0));
-	auto domain_ptree = read_xml_from_string(domain_xml);
+	auto domain_ptree = read_xml_from_string(get_domain_xml(domain));
 	auto attached_devices = domain_ptree.get_child("domain.devices");
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Find attached devices.";
 	std::vector<PCI_address> addresses;

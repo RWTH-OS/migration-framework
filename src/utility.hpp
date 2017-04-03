@@ -40,6 +40,9 @@ struct Deleter_virDomainSnapshot
 // As we prefer std::string this function converts and frees.
 std::string convert_and_free_cstr(char *cstr);
 
+// Get an xml string of the domains config
+std::string get_domain_xml(virDomainPtr domain);
+
 // Struct for holding memory stats of a domain.
 struct Memory_stats
 {

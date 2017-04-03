@@ -9,23 +9,60 @@
 #ifndef IVSHMEM_HANDLER_HPP
 #define IVSHMEM_HANDLER_HPP
 
+#include <fast-lib/message/migfra/time_measurement.hpp>
+
+#include <libvirt/libvirt.h>
+#include <boost/property_tree/ptree.hpp>
+
 #include <string>
+#include <vector>
+#include <memory>
+
+using Time_measurement = fast::msg::migfra::Time_measurement;
 
 /**
- * \brief This function adds the qemu-command snippet to an xml string.
+ * \brief A struct representing an ivshmem device.
  */
-std::string add_ivshmem_dev(const std::string &xml, const std::string &id, const std::string &size, const std::string &path);
-
-/**
- * \brief This class handles the ivshmem device during migration.
- */
-class Ivshmem_handler
+struct Ivshmem_device
 {
-	Ivshmem_handler();
-	~Ivshmem_handler() noexcept(false);
 
-	void pre_migration();
-	void post_migration();
+	Ivshmem_device(std::string id, std::string size, std::string unit = "M");
+	Ivshmem_device(const std::string &xml_desc);
+
+	void from_xml(const std::string &xml_desc);
+	std::string to_xml() const;
+
+	std::string id;
+	std::string size;
+	std::string unit;
+	boost::property_tree::ptree pt_pci;
+};
+
+/**
+ * \brief This function adds the proper xml snippet to the domain config.
+ */
+void attach_ivshmem_device(virDomainPtr domain, const Ivshmem_device &device);
+
+/**
+ * \brief RAII-guard which detaches ivshmem devices in constructor and reattaches in destructor.
+ *
+ * If no error occures during migration, the destination domain should be set.
+ */
+class Migrate_ivshmem_guard
+{
+public:
+	Migrate_ivshmem_guard(std::shared_ptr<virDomain> domain, Time_measurement &time_measurement, std::string tag_postfix = "");
+	~Migrate_ivshmem_guard() noexcept(false);
+
+	void set_destination_domain(std::shared_ptr<virDomain> dest_domain);
+private:
+	void detach();
+	void reattach();
+
+	std::shared_ptr<virDomain> domain;
+	std::vector<Ivshmem_device> detached_devices;
+	Time_measurement &time_measurement;
+	std::string tag_postfix;
 };
 
 #endif
