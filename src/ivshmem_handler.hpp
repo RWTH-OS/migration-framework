@@ -12,6 +12,7 @@
 #include <fast-lib/message/migfra/time_measurement.hpp>
 
 #include <libvirt/libvirt.h>
+#include <boost/property_tree/ptree.hpp>
 
 #include <string>
 #include <vector>
@@ -34,6 +35,7 @@ struct Ivshmem_device
 	std::string id;
 	std::string size;
 	std::string unit;
+	boost::property_tree::ptree pt_pci;
 };
 
 /**

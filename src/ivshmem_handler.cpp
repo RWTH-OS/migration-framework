@@ -13,9 +13,9 @@ FASTLIB_LOG_INIT(ivshmem_handler_log, "Ivshmem_handler")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(ivshmem_handler_log, trace);
 
 Ivshmem_device::Ivshmem_device(std::string id, std::string size, std::string unit) :
-	id(id),
-	size(size),
-	unit(unit)
+	id(std::move(id)),
+	size(std::move(size)),
+	unit(std::move(unit))
 {
 }
 
@@ -27,9 +27,21 @@ Ivshmem_device::Ivshmem_device(const std::string &xml_desc)
 void Ivshmem_device::from_xml(const std::string &xml_desc)
 {
 	auto pt = read_xml_from_string(xml_desc);
-	id = pt.get<decltype(id)>("shmem.<xmlattr>.name");
-	size = pt.get<decltype(size)>("shmem.size");
-	unit = pt.get<decltype(unit)>("shmem.size.<xmlattr>.unit");
+	if (pt.count("shmem") == 1) {
+		id = pt.get<decltype(id)>("shmem.<xmlattr>.name");
+		size = pt.get<decltype(size)>("shmem.size");
+		unit = pt.get<decltype(unit)>("shmem.size.<xmlattr>.unit");
+		if (pt.get_child("shmem").count("address") == 1) {
+			pt_pci = pt.get_child("shmem.address");
+		}
+	} else {
+		id = pt.get<decltype(id)>("alias.<xmlattr>.name");
+		size = pt.get<decltype(size)>("size");
+		unit = pt.get<decltype(unit)>("size.<xmlattr>.unit");
+		if (pt.count("address") == 1) {
+			pt_pci = pt.get_child("address");
+		}
+	}
 }
 
 std::string Ivshmem_device::to_xml() const
@@ -48,15 +60,17 @@ std::string Ivshmem_device::to_xml() const
 	pt.put("shmem.size.<xmlattr>.unit", unit);
 	pt.put("shmem.size", size);
 	pt.put("shmem.alias.<xmlattr>.name", id);
+	if (!pt_pci.empty())
+		pt.put_child("shmem.address", pt_pci);
 	return write_xml_to_string(pt);
 }
 
 void attach_ivshmem_device(virDomainPtr domain, const Ivshmem_device &device)
 {
+	FASTLIB_LOG(ivshmem_handler_log, trace) << "Attaching device " << device.to_xml();
 	auto ret = virDomainAttachDevice(domain, device.to_xml().c_str());
 	if (ret != 0)
 		throw std::runtime_error(std::string("Could not attach ivshmem device. ") + virGetLastErrorMessage());
-	
 }
 
 Migrate_ivshmem_guard::Migrate_ivshmem_guard(std::shared_ptr<virDomain> domain, Time_measurement &time_measurement, std::string tag_postfix) :
@@ -99,24 +113,27 @@ void Migrate_ivshmem_guard::detach()
 	for (const auto &device : attached_devices) {
 		if (device.first == "shmem") {
 			detached_devices.emplace_back(write_xml_to_string(device.second));
-			FASTLIB_LOG(ivshmem_handler_log, trace) << "XML:\n" << write_xml_to_string(device.second);
 		}
 	}
-	if (detached_devices.size() == 0)
+	if (detached_devices.size() == 0) {
 		FASTLIB_LOG(ivshmem_handler_log, trace) << "Could not find any attached ivshmem devices.";
-	if (detached_devices.size() > 1) 
-		throw std::runtime_error("Found more than one ivshmem device. Only migration of one is supported.");
-	if (virDomainDetachDevice(domain.get(), detached_devices.front().to_xml().c_str()) != 0) {
-		FASTLIB_LOG(ivshmem_handler_log, trace) << "Error detaching device. " << virGetLastErrorMessage();
+	} else {
+		if (detached_devices.size() > 1) 
+			throw std::runtime_error("Found more than one ivshmem device. Only migration of one is supported.");
+		FASTLIB_LOG(ivshmem_handler_log, trace) << "Detaching device: " << detached_devices.front().to_xml();
+		if (virDomainDetachDevice(domain.get(), detached_devices.front().to_xml().c_str()) != 0) {
+			throw std::runtime_error(std::string("Error detaching device. ") + virGetLastErrorMessage());
+		}
 	}
 }
 
 void Migrate_ivshmem_guard::reattach()
 {
-	time_measurement.tick("reattach-ivshmem-devs" + tag_postfix);
-	if (detached_devices.size() != 1)
-		FASTLIB_LOG(ivshmem_handler_log, trace) << "Wrong number of detached ivshmem devices: " << detached_devices.size();
-	FASTLIB_LOG(ivshmem_handler_log, trace) << "Reattach ivshmem device " << detached_devices.front().to_xml();
-	attach_ivshmem_device(domain.get(), detached_devices.front());
-	time_measurement.tock("reattach-ivshmem-devs" + tag_postfix);
-}
+	if (detached_devices.size() > 0) {
+		if (detached_devices.size() != 1)
+			throw std::runtime_error("Wrong number of detached ivshmem devices: " + std::to_string(detached_devices.size()));
+		time_measurement.tick("reattach-ivshmem-devs" + tag_postfix);
+		attach_ivshmem_device(domain.get(), detached_devices.front());
+		time_measurement.tock("reattach-ivshmem-devs" + tag_postfix);
+	}
+}	

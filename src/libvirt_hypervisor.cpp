@@ -603,7 +603,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		pci_device_handler->attach(domain.get(), pci_id);
 	}
 	if (task.ivshmem.is_valid()) {
-		Ivshmem_device ivshmem_device(task.ivshmem->id, task.ivshmem->size, task.ivshmem->path.get_or(""));
+		Ivshmem_device ivshmem_device(task.ivshmem->id, task.ivshmem->size);
 		attach_ivshmem_device(domain.get(), ivshmem_device);
 	}
 	// Wait for domain to boot
