@@ -803,8 +803,8 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		Pscom_handler pscom_handler(task, comm, time_measurement);
 		// Guard migration of PCI devices.
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guard for device migration.";
-		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
 		Migrate_ivshmem_guard ivshmem_guard(domain, time_measurement);
+		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement);
 		// Guard repin of vcpus.
 		// In particular, resume after migration since repin is done after migration in suspended state.
 		Repin_guard repin_guard(domain, flags, task.vcpu_map, time_measurement);
