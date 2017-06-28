@@ -184,7 +184,7 @@ void create(virDomainPtr domain)
 
 /**
  * \brief Get the state of the domain.
- * 
+ *
  * \param domain The domain which state is retrieved.
  * \returns One of enum virDomainState (http://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState).
  */
@@ -211,7 +211,7 @@ struct Domain_state_error :
 
 /**
  * \brief Check if state of a domain is as expected.
- * 
+ *
  * \param domain The domain to check the state of.
  * \param expected_state The expected state with which the state of the domain is compared to.
  */
@@ -285,7 +285,7 @@ void set_max_memory(virDomainPtr domain, unsigned long memory)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
 	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1) {
-		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) 
+		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory)
 				+ " KiB.");
 	}
 }
@@ -344,7 +344,7 @@ std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain, bool hal
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create snapshot";
 	std::shared_ptr<virDomainSnapshot> snapshot(
-			virDomainSnapshotCreateXML(domain, 
+			virDomainSnapshotCreateXML(domain,
 "<domainsnapshot><description>Snapshot for migration</description>\
 	<memory snapshot='internal'/>\
 </domainsnapshot>"
@@ -486,10 +486,10 @@ private:
 
 };
 
-Repin_guard::Repin_guard(std::shared_ptr<virDomain> domain, 
-		unsigned long &flags, 
+Repin_guard::Repin_guard(std::shared_ptr<virDomain> domain,
+		unsigned long &flags,
 		const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map,
-		Time_measurement &time_measurement, 
+		Time_measurement &time_measurement,
 		std::string tag_postfix) :
 	domain(domain),
 	flags(flags),
@@ -720,7 +720,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 			FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using snapshot.";
 			// TODO: RAII handler for snapshot for better error recovery
 			// TODO: Move to dedicated function
-			auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(ivshmem_guard) &ivshmem_guard1, decltype(repin_guard) &repin_guard1, 
+			auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(ivshmem_guard) &ivshmem_guard1, decltype(repin_guard) &repin_guard1,
 					decltype(domain) domain2, decltype(name) name2, decltype(conn) conn2, decltype(flags) flags2, decltype(dev_guard) &dev_guard2, decltype(ivshmem_guard) &ivshmem_guard2, decltype(repin_guard) &repin_guard2)
 			{
 				// Suspend vm1

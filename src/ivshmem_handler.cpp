@@ -109,7 +109,7 @@ void Migrate_ivshmem_guard::detach()
 {
 	auto domain_ptree = read_xml_from_string(get_domain_xml(domain.get()));
 	auto attached_devices = domain_ptree.get_child("domain.devices");
-	
+
 	for (const auto &device : attached_devices) {
 		if (device.first == "shmem") {
 			detached_devices.emplace_back(write_xml_to_string(device.second));
@@ -118,7 +118,7 @@ void Migrate_ivshmem_guard::detach()
 	if (detached_devices.size() == 0) {
 		FASTLIB_LOG(ivshmem_handler_log, trace) << "Could not find any attached ivshmem devices.";
 	} else {
-		if (detached_devices.size() > 1) 
+		if (detached_devices.size() > 1)
 			throw std::runtime_error("Found more than one ivshmem device. Only migration of one is supported.");
 		FASTLIB_LOG(ivshmem_handler_log, trace) << "Detaching device: " << detached_devices.front().to_xml();
 		if (virDomainDetachDevice(domain.get(), detached_devices.front().to_xml().c_str()) != 0) {
@@ -136,4 +136,4 @@ void Migrate_ivshmem_guard::reattach()
 		attach_ivshmem_device(domain.get(), detached_devices.front());
 		time_measurement.tock("reattach-ivshmem-devs" + tag_postfix);
 	}
-}	
+}

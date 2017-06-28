@@ -45,7 +45,7 @@ public:
 	/**
 	 * \brief Starts the main loop.
 	 *
-	 * This loop receives messages from the Communicator, parses them using the \link parser \endlink  and executes 
+	 * This loop receives messages from the Communicator, parses them using the \link parser \endlink  and executes
 	 * generated Task by using the Hypervisor.
 	 */
 	void loop();

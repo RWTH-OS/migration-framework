@@ -71,8 +71,8 @@ void send_quit_result(std::shared_ptr<fast::Communicator> comm, const std::strin
 	comm->send_message(Result_container("quit", {Result("n/a", "success")}, id).to_string());
 }
 
-std::future<Result> execute(std::shared_ptr<Task> task, 
-		std::shared_ptr<Hypervisor> hypervisor, 
+std::future<Result> execute(std::shared_ptr<Task> task,
+		std::shared_ptr<Hypervisor> hypervisor,
 		std::shared_ptr<fast::Communicator> comm)
 {
 	auto func = [task, hypervisor, comm]

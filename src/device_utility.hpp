@@ -31,7 +31,7 @@ struct Deleter_virNodeDevice
 std::vector<std::unique_ptr<virNodeDevice, Deleter_virNodeDevice>> list_all_node_devices_wrapper(virConnectPtr conn, unsigned int flags);
 
 // Converts integer type numbers to string in hex format.
-template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr> 
+template<typename T, typename std::enable_if<std::is_integral<T>{}>::type* = nullptr>
 std::string to_hex_string(const T &integer, int digits, bool show_base = true)
 {
 	std::stringstream ss;

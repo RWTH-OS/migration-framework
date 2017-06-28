@@ -57,9 +57,9 @@ unsigned long long get_memory_size(virDomainPtr domain)
 
 std::string get_hostname()
 {
-	char hostname_cstr[HOST_NAME_MAX];
+	char hostname_cstr[_POSIX_HOST_NAME_MAX];
 	int ret;
-	if ((ret = gethostname(hostname_cstr, HOST_NAME_MAX)) != 0)
+	if ((ret = gethostname(hostname_cstr, _POSIX_HOST_NAME_MAX)) != 0)
 		std::runtime_error(std::string("Failed getting hostname: ") + std::strerror(ret));
 	const std::string hostname(hostname_cstr, std::strlen(hostname_cstr));
 	return hostname;
