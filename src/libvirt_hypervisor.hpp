@@ -11,6 +11,7 @@
 
 #include "hypervisor.hpp"
 
+#include <libvirt/libvirt.h>
 #include <memory>
 #include <vector>
 #include <string>
@@ -85,6 +86,9 @@ public:
 	void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 
 private:
+	std::string generate_disk_image(const std::string base_image_path, const std::string name) const;
+	std::vector<std::string> create_domain_xmls(const virDomainPtr domain, const std::string base_image, const std::vector<fast::msg::migfra::DHCP_info> dhcp_info_vec) const;
+
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;
 	std::string default_driver;

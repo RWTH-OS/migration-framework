@@ -13,7 +13,6 @@
 #include "utility.hpp"
 #include "ivshmem_handler.hpp"
 
-#include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
 #include <fast-lib/log.hpp>
 #include <libssh/libsshpp.hpp>
@@ -25,6 +24,11 @@
 #include <chrono>
 #include <mutex>
 #include <regex>
+#include <uuid/uuid.h>
+#include <libgen.h>
+#include <sys/sysinfo.h>
+
+using virDomain_ptr = std::shared_ptr<virDomain>;
 
 using namespace fast::msg::migfra;
 
@@ -36,6 +40,16 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(repin_guard_log, trace);
 //
 // Helper functions
 //
+
+// returns the hosts free memory in KiB
+unsigned long get_free_memory()
+{
+       struct sysinfo system_info;
+       if (sysinfo(&system_info) < 0)
+               throw std::runtime_error("Error getting system info.");
+
+       return (system_info.freeram*system_info.mem_unit)/1024;
+}
 
 /**
  * \brief Tries to connect to a domain via ssh in order to test if the domain is booted and ready to use.
@@ -276,6 +290,7 @@ bool is_persistent(virDomainPtr domain)
 
 void set_memory(virDomainPtr domain, unsigned long memory)
 {
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory to: " + std::to_string(memory);
 	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting amount of memory to " + std::to_string(memory)
 				+ " KiB.");
@@ -283,7 +298,7 @@ void set_memory(virDomainPtr domain, unsigned long memory)
 
 void set_max_memory(virDomainPtr domain, unsigned long memory)
 {
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set max. memory to: " + std::to_string(memory);
 	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1) {
 		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory)
 				+ " KiB.");
@@ -463,6 +478,109 @@ void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>
 	}
 }
 
+int uuid_equal(unsigned char *id_a, unsigned char *id_b) {
+	int i, res = 1;
+	for (i=0; i<VIR_UUID_BUFLEN; ++i) {
+		if (id_a[i] != id_b[i]) {
+			res = 0;
+			break;
+		}
+	}
+
+	return res;
+}
+
+std::string determine_base_image(const virConnectPtr conn, const virDomainPtr domain) {
+	// Get domain UUID
+	unsigned char domain_uuid[VIR_UUID_BUFLEN];
+       	if (virDomainGetUUID(domain, domain_uuid) < 0)
+		throw std::runtime_error(virGetLastErrorMessage());
+
+	// Get all domain statistics
+	virDomainStatsRecordPtr *dom_stats_record;
+	int num_stats = virConnectGetAllDomainStats(conn, VIR_DOMAIN_STATS_BLOCK, &dom_stats_record, VIR_CONNECT_GET_ALL_DOMAINS_STATS_INACTIVE);
+	if (num_stats < 0)
+		throw std::runtime_error(virGetLastErrorMessage());
+
+	// Determine path to base image
+	std::string base_image_str;
+	for (int i=0; i<num_stats; ++i) {
+		// Get UUID for current domain
+		unsigned char cur_domain_uuid[VIR_UUID_BUFLEN];
+	       	if (virDomainGetUUID(dom_stats_record[i]->dom, cur_domain_uuid) < 0)
+			throw std::runtime_error(virGetLastErrorMessage());
+
+		if (uuid_equal(domain_uuid, cur_domain_uuid)) {
+			for (int j=0; j<dom_stats_record[i]->nparams; ++j) {
+				if (!strncmp("block.0.path", dom_stats_record[i]->params[j].field, VIR_TYPED_PARAM_FIELD_LENGTH)) {
+					base_image_str = std::string(dom_stats_record[i]->params[j].value.s);
+					break;
+				}
+			}
+		}
+	}
+	return base_image_str;
+}
+
+std::string Libvirt_hypervisor::generate_disk_image(const std::string base_image_path, const std::string dom_name) const {
+	// TODO: cleanup images in stop task
+
+	char *base_image_path_cstr = new char[base_image_path.size() + 1];
+	std::copy(base_image_path.begin(), base_image_path.end(), base_image_path_cstr);
+	base_image_path_cstr[base_image_path.size()] = '\0';
+
+	// don't forget to free the string after finished using it
+	// delete[] writable;
+	std::string base_path = std::string(dirname(base_image_path_cstr));
+	std::string image_path = base_path + "/" + dom_name + ".qcow2";
+
+	// generate qemu-img command
+	std::string cmd = "qemu-img create -f qcow2 ";
+	cmd += "-b " + base_image_path + " ";
+	cmd += image_path;
+
+	// create the image
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create disk image for '" + dom_name + "'.";
+	if (system(cmd.c_str()) == -1)
+		throw std::runtime_error("Could not create disk image for '" + dom_name + "'. Calling sequence was: '" + cmd + "'.");
+
+	return image_path;
+}
+
+std::vector<std::string> Libvirt_hypervisor::create_domain_xmls(const virDomainPtr domain, const std::string base_image, const std::vector<fast::msg::migfra::DHCP_info> dhcp_info_vec) const {
+	std::vector<std::string> domain_xmls;
+	domain_xmls.reserve(dhcp_info_vec.size());
+
+	// retrieve base XML
+	std::string base_xml = virDomainGetXMLDesc(domain, 0);
+
+	for (const auto &dhcp_info : dhcp_info_vec) {
+		std::string cur_xml = base_xml;
+
+		// generate copy-on-write image
+		std::string image_path = generate_disk_image(base_image, dhcp_info.hostname);
+
+		// generate XML
+		std::regex name_regex("(<name>)(.+)(</name>)"); // name
+		cur_xml = std::regex_replace(cur_xml, name_regex, "$1" + dhcp_info.hostname + "$3");
+		std::regex mac_regex("([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})"); // MAC
+		cur_xml = std::regex_replace(cur_xml, mac_regex, dhcp_info.mac);
+		std::regex disk_regex(R"((.*<source file=".*)(.*)([.]qcow2"/>))"); // disk
+		cur_xml = std::regex_replace(cur_xml, disk_regex, "$1" + image_path + "$3");
+		uuid_t uuid; // uuid
+		uuid_generate(uuid);
+		char uuid_char_str[40];
+		uuid_unparse(uuid, uuid_char_str);
+		std::string uuid_str(static_cast<const char *>(uuid_char_str));
+		std::regex uuid_regex("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+		cur_xml = std::regex_replace(cur_xml, uuid_regex, uuid_str);
+
+		domain_xmls.emplace_back(cur_xml);
+	}
+
+	return domain_xmls;
+}
+
 // RAII-guard to add pause option to migrate flags in constructor and repin and resume in destructor.
 // If no error occures during migration the domain on destination should be set.
 class Repin_guard
@@ -557,57 +675,99 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	// Connect to libvirt to libvirt
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	auto conn = connect("", driver);
-	// Check if domain already running on a remote host
-	if (!task.vm_name.is_valid())
-		throw std::runtime_error("vm-name is not valid.");
-	auto vm_name = task.vm_name.get();
-	check_remote_state(vm_name, nodes, VIR_DOMAIN_SHUTOFF);
-	// Get domain
-	std::shared_ptr<virDomain> domain;
-	if (task.xml.is_valid()) {
-		std::string xml = task.xml.get();
-		// Define domain from XML (or start paused if transient)
+	auto func = [&](const Start task) {
+		// Check if domain already running on a remote host
+		if (!task.vm_name.is_valid())
+			throw std::runtime_error("vm-name is not valid.");
+		auto vm_name = task.vm_name.get();
+		check_remote_state(vm_name, nodes, VIR_DOMAIN_SHUTOFF);
+		// Get domain
+		std::shared_ptr<virDomain> domain;
+		if (task.xml.is_valid()) {
+			std::string xml = task.xml.get();
+			// Define domain from XML (or start paused if transient)
+			if (task.transient.is_valid() && task.transient.get())
+				domain = create_from_xml(conn.get(), xml, true);
+			else
+				domain = define_from_xml(conn.get(), xml);
+		} else {
+			if (task.transient.is_valid() && task.transient.get())
+				throw std::runtime_error("XML description is missing which is required to create a transient domain.");
+			// Find existing domain
+			domain = find_by_name(conn.get(), *task.vm_name);
+			// Get domain info + check if in shutdown state
+			check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
+		}
+		// Set memory
+		if (task.memory.is_valid()) {
+			// TODO: Add separat max memory option
+			set_max_memory(domain.get(), task.memory);
+			set_memory(domain.get(), task.memory);
+		}
+		// Set VCPUs
+		if (task.vcpus.is_valid()) {
+			// TODO: Add separat max vcpus option
+			set_max_vcpus(domain.get(), task.vcpus);
+			set_vcpus(domain.get(), task.vcpus);
+		}
+		// Start domain (or resume if transient)
 		if (task.transient.is_valid() && task.transient.get())
-			domain = create_from_xml(conn.get(), xml, true);
+			resume_impl(domain.get());
 		else
-			domain = define_from_xml(conn.get(), xml);
+			create(domain.get());
+		// Attach devices
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_ids.size() << " devices.";
+		for (auto &pci_id : task.pci_ids) {
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach device with PCI-ID " << pci_id.str();
+			pci_device_handler->attach(domain.get(), pci_id);
+		}
+		if (task.ivshmem.is_valid()) {
+			Ivshmem_device ivshmem_device(task.ivshmem->id, task.ivshmem->size);
+			attach_ivshmem_device(domain.get(), ivshmem_device);
+		}
+		// Wait for domain to boot
+		probe_ssh_connection(domain.get(), std::chrono::seconds(start_timeout));
+	};
+
+	// Create virtual cluster if base_name is given
+	if (task.base_name) {
+		// Get handle to base domain
+		auto base_dom = find_by_name(conn.get(), task.base_name.get());
+
+		// Prepare XML descriptions
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domains XMLs.";
+		std::string  base_image = determine_base_image(conn.get(), base_dom.get());
+		std::vector<std::string> domain_xmls = create_domain_xmls(base_dom.get(), base_image, task.dhcp_info);
+
+		// Create domains from XMLs
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create domains.";
+		auto domain_cnt = 0;
+		std::vector<std::future<void>> handles;
+		for (const auto &domain_xml : domain_xmls) {
+			Start new_task = task;
+			new_task.xml = domain_xml;
+			new_task.transient = true;
+			new_task.vm_name = task.dhcp_info[domain_cnt++].hostname;
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain name: " + new_task.vm_name.get();
+
+//			// Set memory
+//			// max_mem = host_mem * 0.8 / count
+//			auto usable_mem = get_free_memory() * 0.8;
+//			FASTLIB_LOG(libvirt_hyp_log, trace) << "Usuable memory: " + std::to_string(usable_mem);
+//			if (task.memory.is_valid() && task.memory <= usable_mem) {
+//				start_task.memory.set(task.memory.get());
+//			} else {
+//				unsigned long domain_mem = usable_mem / domain_xmls.size();
+//				FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain memory: " + std::to_string(domain_mem);
+//				start_task.memory.set(domain_mem);
+//				FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain memory is: " + std::to_string(start_task.memory);
+//			}
+			// Call start task
+			handles.push_back(std::async(std::launch::async, func, new_task));
+		}
 	} else {
-		if (task.transient.is_valid() && task.transient.get())
-			throw std::runtime_error("XML description is missing which is required to create a transient domain.");
-		// Find existing domain
-		domain = find_by_name(conn.get(), *task.vm_name);
-		// Get domain info + check if in shutdown state
-		check_state(domain.get(), VIR_DOMAIN_SHUTOFF);
+		func(task);
 	}
-	// Set memory
-	if (task.memory.is_valid()) {
-		// TODO: Add separat max memory option
-		set_max_memory(domain.get(), task.memory);
-		set_memory(domain.get(), task.memory);
-	}
-	// Set VCPUs
-	if (task.vcpus.is_valid()) {
-		// TODO: Add separat max vcpus option
-		set_max_vcpus(domain.get(), task.vcpus);
-		set_vcpus(domain.get(), task.vcpus);
-	}
-	// Start domain (or resume if transient)
-	if (task.transient.is_valid() && task.transient.get())
-		resume_impl(domain.get());
-	else
-		create(domain.get());
-	// Attach devices
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_ids.size() << " devices.";
-	for (auto &pci_id : task.pci_ids) {
-		FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach device with PCI-ID " << pci_id.str();
-		pci_device_handler->attach(domain.get(), pci_id);
-	}
-	if (task.ivshmem.is_valid()) {
-		Ivshmem_device ivshmem_device(task.ivshmem->id, task.ivshmem->size);
-		attach_ivshmem_device(domain.get(), ivshmem_device);
-	}
-	// Wait for domain to boot
-	probe_ssh_connection(domain.get(), std::chrono::seconds(start_timeout));
 }
 
 void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measurement)

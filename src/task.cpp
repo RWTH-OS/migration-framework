@@ -102,6 +102,8 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 						vm_name = xml;
 						throw std::runtime_error("Could not find vm-name in xml.");
 					}
+				} else if (start_task->base_name.is_valid()) {
+					vm_name = start_task->base_name.get();
 				}
 				hypervisor->start(*start_task, time_measurement);
 			} else if (stop_task) {
