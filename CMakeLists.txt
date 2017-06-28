@@ -32,6 +32,15 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pthread")
 
+if(DEFINED OPENSSL_INCLUDE_DIR)
+	set(OPENSSL_INCLUDE_DIR ${OPENSSL_INCLUDE_DIR} CACHE STRING "Include directory of openssl.")
+else()
+	set(OPENSSL_INCLUDE_DIR "/usr/include/openssl" CACHE STRING "Include directory of openssl.")
+endif()
+
+### Option to disable hypervisors
+option(ENABLE_PONCI "Build the ponci hypervisor" ON)
+
 ### Find libraries
 set(USE_BOOST_CACHE ON)
 set(BOOST_CACHE_DIR ${PROJECT_BINARY_DIR})
@@ -44,8 +53,8 @@ list(APPEND LIBS_BENCHMARK "${BoostProgramOptionsLibs}" "${BoostPropertyTreeLibs
 include(ExternalProject)
 ExternalProject_Add(
 	fastlib
-	GIT_REPOSITORY https://github.com/fast-project/fast-lib.git
-	GIT_TAG v0.4.3
+	GIT_REPOSITORY https://github.com/spickartz/fast-lib.git
+	GIT_TAG "sp/vmpiexec"
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 	CMAKE_ARGS -DCMAKE_CXX_FLAGS=-fpic -DBUILD_SHARED_LIBS=OFF -DENABLE_LOGGING=${ENABLE_LOGGING} -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 )
@@ -53,22 +62,34 @@ ExternalProject_Get_Property(fastlib install_dir)
 include_directories("${install_dir}/include")
 include_directories(SYSTEM "${install_dir}/include/fast-lib/external")
 set(FASTLIB "${install_dir}/lib/libfastlib.a")
-list(APPEND LIBS "${FASTLIB}" "-lrt")
-list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
+
+# libuuid
+list(APPEND LIBS "-luuid")
+
+# Don't link against rt for MacOS
+if (UNIX AND NOT APPLE)
+	find_library(LIBRT rt)
+	if (LIBRT)
+		list(APPEND LIBS "${FASTLIB}" "-lrt")
+		list(APPEND LIBS_BENCHMARK "${FASTLIB}" "-lrt")
+	endif (LIBRT)
+endif (UNIX AND NOT APPLE)
 
 
 # libponci
-ExternalProject_Add(
-	libponci
-	GIT_REPOSITORY https://github.com/lrr-tum/libponci.git
-	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
-	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-)
-ExternalProject_Get_Property(libponci install_dir)
-include_directories("${install_dir}/include")
-set(LIBPONCI "${install_dir}/lib/libponci.a")
-list(APPEND LIBS "${LIBPONCI}")
-list(APPEND LIBS_BENCHMARK "${LIBPONCI}")
+if (ENABLE_PONCI)
+	ExternalProject_Add(
+		libponci
+		GIT_REPOSITORY https://github.com/lrr-tum/libponci.git
+		CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
+		CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+	)
+	ExternalProject_Get_Property(libponci install_dir)
+	include_directories("${install_dir}/include")
+	set(LIBPONCI "${install_dir}/lib/libponci.a")
+	list(APPEND LIBS "${LIBPONCI}")
+	list(APPEND LIBS_BENCHMARK "${LIBPONCI}")
+endif()
 
 # libssh
 ExternalProject_Add(
@@ -76,7 +97,7 @@ ExternalProject_Add(
 	GIT_REPOSITORY git://git.libssh.org/projects/libssh.git
 	GIT_TAG libssh-0.7.2
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
-	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}
 )
 ExternalProject_Get_Property(libssh install_dir)
 include_directories(SYSTEM "${install_dir}/include")
@@ -98,7 +119,6 @@ endif()
 ### Define source files.
 set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/libvirt_hypervisor.cpp
-	${PROJECT_SOURCE_DIR}/src/ponci_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/dummy_hypervisor.cpp
 	${PROJECT_SOURCE_DIR}/src/task_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/task.cpp
@@ -108,6 +128,11 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/device_utility.cpp
 	${PROJECT_SOURCE_DIR}/src/utility.cpp
 )
+
+if (ENABLE_PONCI)
+	set(SRC ${SRC} ${PROJECT_SOURCE_DIR}/src/ponci_hypervisor.cpp)
+endif()
+
 set(SRC_BENCHMARK ${PROJECT_SOURCE_DIR}/src/benchmark_main.cpp)
 
 ### Add config files
@@ -135,7 +160,13 @@ configure_file(
 # Add executable
 add_executable(migfra ${SRC})
 add_executable(migfra_benchmark ${SRC_BENCHMARK})
-add_dependencies(migfra fastlib libssh libponci)
-add_dependencies(migfra_benchmark fastlib libponci)
+add_dependencies(migfra fastlib libssh)
+add_dependencies(migfra_benchmark fastlib)
+
+if (ENABLE_PONCI)
+	add_dependencies(migfra libponci)
+	add_dependencies(migfra_benchmark libponci)
+endif()
+
 target_link_libraries(migfra ${LIBS})
 target_link_libraries(migfra_benchmark ${LIBS_BENCHMARK})
