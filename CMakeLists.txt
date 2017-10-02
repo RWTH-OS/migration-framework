@@ -70,12 +70,16 @@ list(APPEND LIBS "${LIBPONCI}")
 list(APPEND LIBS_BENCHMARK "${LIBPONCI}")
 
 # libssh
+# Use the second OPENSSL_VARS variable to define the location of openssl-1.0 if your system uses openssl-1.1.
+# openssl-1.1 causes problems with libssh.
+set(OPENSSL_VARS "")
+#set(OPENSSL_VARS -DOPENSSL_INCLUDE_DIR=/usr/include/openssl-1.0 -DOPENSSL_SSL_LIBRARY=/usr/lib/openssl-1.0/libssl.so -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/openssl-1.0/libcrypto.so)
 ExternalProject_Add(
 	libssh
 	GIT_REPOSITORY git://git.libssh.org/projects/libssh.git
 	GIT_TAG libssh-0.7.5
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
-	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DOPENSSL_INCLUDE_DIR=/usr/include/openssl-1.0 -DOPENSSL_SSL_LIBRARY=/usr/lib/openssl-1.0/libssl.so -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/openssl-1.0/libcrypto.so
+	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ${OPENSSL_VARS}
 )
 ExternalProject_Get_Property(libssh install_dir)
 include_directories(SYSTEM "${install_dir}/include")
