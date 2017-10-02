@@ -12,6 +12,7 @@
 #include "pci_device_handler.hpp"
 #include "utility.hpp"
 #include "ivshmem_handler.hpp"
+#include "repin_handler.hpp"
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
@@ -30,8 +31,6 @@ using namespace fast::msg::migfra;
 
 FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
-FASTLIB_LOG_INIT(repin_guard_log, "Repin_guard")
-FASTLIB_LOG_SET_LEVEL_GLOBAL(repin_guard_log, trace);
 
 //
 // Helper functions
@@ -305,20 +304,6 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 				+ ".");
 }
 
-void suspend_impl(virDomainPtr domain)
-{
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Suspend domain.";
-	if (virDomainSuspend(domain) == -1)
-		throw std::runtime_error(std::string("Error suspending domain: ") + virGetLastErrorMessage());
-}
-
-void resume_impl(virDomainPtr domain)
-{
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Resume domain.";
-	if (virDomainResume(domain) == -1)
-		throw std::runtime_error(std::string("Error resuming domain: ") + virGetLastErrorMessage());
-}
-
 void destroy(virDomainPtr domain)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Destroy domain.";
@@ -428,115 +413,6 @@ bool check_snapshot_required(virDomainPtr domain1, virConnectPtr conn1, virDomai
 	return host1_free_memory < domain2_size || host2_free_memory < domain1_size;
 }
 
-virConnectPtr get_connect_of_domain(virDomainPtr domain)
-{
-	auto ptr = virDomainGetConnect(domain);
-	if (ptr == nullptr)
-		throw std::runtime_error(std::string("Error getting connection of domain: ") + virGetLastErrorMessage());
-	return ptr;
-}
-
-size_t get_cpumaplen(virConnectPtr conn)
-{
-	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
-	if (cpus == -1)
-		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
-	return VIR_CPU_MAPLEN(cpus);
-}
-
-void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
-{
-	std::vector<unsigned char> cpumap(maplen, 0);
-	for (auto cpu : cpus)
-		VIR_USE_CPU(cpumap, cpu);
-	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
-		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
-}
-
-void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>> &vcpu_map)
-{
-	// Get number of CPUs on node
-	auto maplen = get_cpumaplen(get_connect_of_domain(domain));
-	// Create cpumap and pin for each vcpu
-	for (unsigned int vcpu = 0; vcpu != vcpu_map.size(); ++vcpu) {
-		pin_vcpu_to_cpus(domain, vcpu, vcpu_map[vcpu], maplen);
-	}
-}
-
-// RAII-guard to add pause option to migrate flags in constructor and repin and resume in destructor.
-// If no error occures during migration the domain on destination should be set.
-class Repin_guard
-{
-public:
-	Repin_guard(std::shared_ptr<virDomain> domain,
-			unsigned long &flags,
-			const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map,
-			Time_measurement &time_measurement,
-			std::string tag_postfix = "");
-	~Repin_guard() noexcept(false);
-
-	void set_destination_domain(std::shared_ptr<virDomain> dest_domain);
-	void repin();
-private:
-	std::shared_ptr<virDomain> domain;
-	unsigned long &flags;
-	const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map;
-	Time_measurement &time_measurement;
-	std::string tag_postfix;
-
-};
-
-Repin_guard::Repin_guard(std::shared_ptr<virDomain> domain, 
-		unsigned long &flags, 
-		const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map,
-		Time_measurement &time_measurement, 
-		std::string tag_postfix) :
-	domain(domain),
-	flags(flags),
-	vcpu_map(vcpu_map),
-	time_measurement(time_measurement),
-	tag_postfix(std::move(tag_postfix))
-{
-	if (this->tag_postfix != "")
-		this->tag_postfix = "-" + this->tag_postfix;
-	if (vcpu_map.is_valid()) {
-		FASTLIB_LOG(repin_guard_log, trace) << "Setting paused-after-migration flag for repinning.";
-		flags |= VIR_MIGRATE_PAUSED;
-	}
-}
-
-Repin_guard::~Repin_guard() noexcept(false)
-{
-	try {
-		repin();
-	} catch (...) {
-		// Only log exception when unwinding stack, else rethrow exception.
-		if (std::uncaught_exception())
-			FASTLIB_LOG(repin_guard_log, trace) << "Exception while repinning/resuming.";
-		else
-			throw;
-	}
-}
-
-void Repin_guard::set_destination_domain(std::shared_ptr<virDomain> dest_domain)
-{
-	// override domain to reattach devices on
-	domain = dest_domain;
-}
-
-void Repin_guard::repin()
-{
-	if (vcpu_map.is_valid()) {
-		time_measurement.tick("repin" + tag_postfix);
-		if (!std::uncaught_exception()) {
-			FASTLIB_LOG(repin_guard_log, trace) << "Repin vcpus.";
-			repin_impl(domain.get(), vcpu_map.get());
-		}
-		resume_impl(domain.get());
-		time_measurement.tock("repin" + tag_postfix);
-	}
-}
-
 //
 // Libvirt_hypervisor implementation
 //
@@ -593,7 +469,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	}
 	// Start domain (or resume if transient)
 	if (task.transient.is_valid() && task.transient.get())
-		resume_impl(domain.get());
+		resume_domain(domain.get());
 	else
 		create(domain.get());
 	// Attach devices
@@ -833,7 +709,8 @@ void Libvirt_hypervisor::repin(const Repin &task, Time_measurement &time_measure
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	repin_impl(domain.get(), vcpu_map);
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Repin domain " << task.vm_name << ".";
+	repin_vcpus(domain.get(), vcpu_map);
 }
 
 void Libvirt_hypervisor::suspend(const fast::msg::migfra::Suspend &task, fast::msg::migfra::Time_measurement &time_measurement)
@@ -844,7 +721,8 @@ void Libvirt_hypervisor::suspend(const fast::msg::migfra::Suspend &task, fast::m
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	suspend_impl(domain.get());
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Suspend domain " << task.vm_name << ".";
+	suspend_domain(domain.get());
 }
 
 void Libvirt_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement)
@@ -855,5 +733,6 @@ void Libvirt_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	resume_impl(domain.get());
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Resume domain " << task.vm_name << ".";
+	resume_domain(domain.get());
 }

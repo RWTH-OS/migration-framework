@@ -107,6 +107,7 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/ivshmem_handler.cpp
+	${PROJECT_SOURCE_DIR}/src/repin_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/device_utility.cpp
 	${PROJECT_SOURCE_DIR}/src/utility.cpp
 )
