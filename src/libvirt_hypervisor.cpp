@@ -18,6 +18,9 @@
 #include <libvirt/virterror.h>
 #include <fast-lib/log.hpp>
 #include <libssh/libsshpp.hpp>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
 
 #include <stdexcept>
 #include <memory>
@@ -75,7 +78,8 @@ void probe_ssh_connection(virDomainPtr domain, const std::chrono::duration<doubl
 std::shared_ptr<virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
 {
 	std::string plus_transport = (transport != "") ? ("+" + transport) : "";
-	std::string uri = driver + plus_transport + "://" + host + "/system";
+	std::string mode = (driver == "lxctools") ? "" : "system";
+	std::string uri = driver + plus_transport + "://" + host + "/" + mode;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to " + uri;
 	std::shared_ptr<virConnect> conn(
 			virConnectOpen(uri.c_str()),
@@ -183,7 +187,7 @@ void create(virDomainPtr domain)
 
 /**
  * \brief Get the state of the domain.
- * 
+ *
  * \param domain The domain which state is retrieved.
  * \returns One of enum virDomainState (http://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState).
  */
@@ -210,7 +214,7 @@ struct Domain_state_error :
 
 /**
  * \brief Check if state of a domain is as expected.
- * 
+ *
  * \param domain The domain to check the state of.
  * \param expected_state The expected state with which the state of the domain is compared to.
  */
@@ -284,7 +288,7 @@ void set_max_memory(virDomainPtr domain, unsigned long memory)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
 	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1) {
-		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) 
+		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory)
 				+ " KiB.");
 	}
 }
@@ -329,7 +333,7 @@ std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain, bool hal
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create snapshot";
 	std::shared_ptr<virDomainSnapshot> snapshot(
-			virDomainSnapshotCreateXML(domain, 
+			virDomainSnapshotCreateXML(domain,
 "<domainsnapshot><description>Snapshot for migration</description>\
 	<memory snapshot='internal'/>\
 </domainsnapshot>"
@@ -375,14 +379,28 @@ unsigned long get_migrate_flags(std::string migration_type)
 
 std::shared_ptr<virDomain> migrate_domain(virDomainPtr domain, virConnectPtr dest_conn, unsigned long flags, const std::string &migrate_uri)
 {
-		FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
-		std::shared_ptr<virDomain> dest_domain(
-			virDomainMigrate(domain, dest_conn, flags, 0, migrate_uri != "" ? migrate_uri.c_str() : nullptr, 0),
-			Deleter_virDomain()
-		);
-		if (!dest_domain)
-			throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
-		return dest_domain;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
+	// Create params only containing migrate uri.
+	std::unique_ptr<virTypedParameter[]> params;
+	size_t params_size = 0;
+	if (migrate_uri != "") {
+		params.reset(new virTypedParameter[1]);
+		strcpy(params[0].field, VIR_MIGRATE_PARAM_URI);
+		params[0].type = VIR_TYPED_PARAM_STRING;
+		// TODO: Fix memory leak
+		params[0].value.s = new char[migrate_uri.size() + 1];
+		strcpy(params[0].value.s, migrate_uri.c_str());
+		params_size = 1;
+	}
+	// Migrate
+	std::shared_ptr<virDomain> dest_domain(
+		virDomainMigrate3(domain, dest_conn, params.get(), params_size, flags),
+		Deleter_virDomain()
+	);
+	// Check for error
+	if (!dest_domain)
+		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
+	return dest_domain;
 }
 
 bool sort_domains_by_size(virDomainPtr domain1, virDomainPtr domain2)
@@ -443,7 +461,7 @@ void Libvirt_hypervisor::swap_migration(const std::string &name, const std::stri
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using snapshot.";
 		// TODO: RAII handler for snapshot for better error recovery
 		// TODO: Move to dedicated function
-		auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(ivshmem_guard) &ivshmem_guard1, decltype(repin_guard) &repin_guard1, 
+		auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(ivshmem_guard) &ivshmem_guard1, decltype(repin_guard) &repin_guard1,
 				decltype(domain) domain2, decltype(name) name2, decltype(conn) conn2, decltype(flags) flags2, decltype(dev_guard) &dev_guard2, decltype(ivshmem_guard) &ivshmem_guard2, decltype(repin_guard) &repin_guard2)
 		{
 			// Suspend vm1
@@ -514,6 +532,31 @@ void Libvirt_hypervisor::swap_migration(const std::string &name, const std::stri
 		}
 		time_measurement.tock("migrate");
 	}
+}
+
+std::string get_host_ip(const std::string &hostname)
+{
+	struct addrinfo hints = {};
+	hints.ai_family = AF_INET; // ipv4 only
+	hints.ai_socktype = SOCK_STREAM;
+	struct addrinfo *servinfo_tmp_ptr = nullptr;
+	int ret;
+	if ((ret = getaddrinfo(hostname.c_str(), "http", &hints, &servinfo_tmp_ptr)) != 0)
+		throw std::runtime_error("Error getting host ip address: getaddrinfo: " + std::string(gai_strerror(ret)));
+	std::shared_ptr<struct addrinfo> servinfo(servinfo_tmp_ptr, [](struct addrinfo *ai){freeaddrinfo(ai);});
+	struct sockaddr_in *h = nullptr;
+	struct addrinfo *p = nullptr;
+	std::vector<std::string> ips;
+	for (p = servinfo.get(); p != nullptr; p = p->ai_next) {
+		h = reinterpret_cast<struct sockaddr_in *>(p->ai_addr);
+		ips.push_back(inet_ntoa(h->sin_addr));
+	}
+ 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Found " << ips.size() << " IPs for hostname " << hostname << ".";
+	for (auto &ip : ips)
+		FASTLIB_LOG(libvirt_hyp_log, trace) << ip;
+	if (ips.size() == 0)
+		throw std::runtime_error("Error getting host IP address: No IP addresses found.");
+	return ips.front();
 }
 
 //
@@ -603,7 +646,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 		// Get domain info + check if in running state
 		check_state(domain.get(), VIR_DOMAIN_RUNNING);
 		// Check if domain is persistent
-		auto persistent = is_persistent(domain.get());
+		auto persistent = (driver == "lxctools") ? true : is_persistent(domain.get());
 		// Detach PCI devices
 		pci_device_handler->detach(domain.get());
 		// Destroy or shutdown domain
@@ -689,7 +732,10 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// Connect to destination
 		auto dest_connection = connect(dest_hostname, driver, transport);
 		// Create migrateuri
-		std::string migrate_uri = get_migrate_uri(rdma_migration, dest_hostname);
+		// TODO: Fix libvirt lxctools driver so no IP has to be sent via migrate uri.
+		std::string migrate_uri = (driver == "lxctools") ?
+			get_host_ip(dest_hostname) :
+			get_migrate_uri(rdma_migration, dest_hostname);
 		// Migrate domain
 		time_measurement.tick("migrate");
 		auto dest_domain = migrate_domain(domain.get(), dest_connection.get(), flags, migrate_uri);
