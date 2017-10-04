@@ -85,6 +85,9 @@ public:
 	void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 
 private:
+
+	void swap_migration(const std::string &name, const std::string &name_swap, const std::string &hostname, const std::string &hostname_swap, unsigned long flags, unsigned long flags_swap, bool rdma_migration, const std::string &driver, const std::string &transport, const fast::msg::migfra::Migrate &task, std::shared_ptr<fast::Communicator> comm, fast::msg::migfra::Time_measurement &time_measurement);
+
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;
 	std::string default_driver;

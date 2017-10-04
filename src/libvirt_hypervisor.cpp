@@ -12,11 +12,15 @@
 #include "pci_device_handler.hpp"
 #include "utility.hpp"
 #include "ivshmem_handler.hpp"
+#include "repin_handler.hpp"
 
 #include <libvirt/libvirt.h>
 #include <libvirt/virterror.h>
 #include <fast-lib/log.hpp>
 #include <libssh/libsshpp.hpp>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
 
 #include <stdexcept>
 #include <memory>
@@ -30,8 +34,6 @@ using namespace fast::msg::migfra;
 
 FASTLIB_LOG_INIT(libvirt_hyp_log, "Libvirt_hypervisor")
 FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
-FASTLIB_LOG_INIT(repin_guard_log, "Repin_guard")
-FASTLIB_LOG_SET_LEVEL_GLOBAL(repin_guard_log, trace);
 
 //
 // Helper functions
@@ -76,7 +78,8 @@ void probe_ssh_connection(virDomainPtr domain, const std::chrono::duration<doubl
 std::shared_ptr<virConnect> connect(const std::string &host, const std::string &driver, const std::string transport = "")
 {
 	std::string plus_transport = (transport != "") ? ("+" + transport) : "";
-	std::string uri = driver + plus_transport + "://" + host + "/system";
+	std::string mode = (driver == "lxctools") ? "" : "system";
+	std::string uri = driver + plus_transport + "://" + host + "/" + mode;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Connect to " + uri;
 	std::shared_ptr<virConnect> conn(
 			virConnectOpen(uri.c_str()),
@@ -184,7 +187,7 @@ void create(virDomainPtr domain)
 
 /**
  * \brief Get the state of the domain.
- * 
+ *
  * \param domain The domain which state is retrieved.
  * \returns One of enum virDomainState (http://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState).
  */
@@ -211,7 +214,7 @@ struct Domain_state_error :
 
 /**
  * \brief Check if state of a domain is as expected.
- * 
+ *
  * \param domain The domain to check the state of.
  * \param expected_state The expected state with which the state of the domain is compared to.
  */
@@ -285,7 +288,7 @@ void set_max_memory(virDomainPtr domain, unsigned long memory)
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Set memory.";
 	if (virDomainSetMemoryFlags(domain, memory, VIR_DOMAIN_AFFECT_CONFIG | VIR_DOMAIN_MEM_MAXIMUM) == -1) {
-		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory) 
+		throw std::runtime_error("Error setting maximum amount of memory to " + std::to_string(memory)
 				+ " KiB.");
 	}
 }
@@ -303,20 +306,6 @@ void set_vcpus(virDomainPtr domain, unsigned int vcpus)
 	if (virDomainSetVcpusFlags(domain, vcpus, VIR_DOMAIN_AFFECT_CONFIG) == -1)
 		throw std::runtime_error("Error setting number of vcpus to " + std::to_string(vcpus)
 				+ ".");
-}
-
-void suspend_impl(virDomainPtr domain)
-{
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Suspend domain.";
-	if (virDomainSuspend(domain) == -1)
-		throw std::runtime_error(std::string("Error suspending domain: ") + virGetLastErrorMessage());
-}
-
-void resume_impl(virDomainPtr domain)
-{
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Resume domain.";
-	if (virDomainResume(domain) == -1)
-		throw std::runtime_error(std::string("Error resuming domain: ") + virGetLastErrorMessage());
 }
 
 void destroy(virDomainPtr domain)
@@ -344,7 +333,7 @@ std::shared_ptr<virDomainSnapshot> create_snapshot(virDomainPtr domain, bool hal
 {
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create snapshot";
 	std::shared_ptr<virDomainSnapshot> snapshot(
-			virDomainSnapshotCreateXML(domain, 
+			virDomainSnapshotCreateXML(domain,
 "<domainsnapshot><description>Snapshot for migration</description>\
 	<memory snapshot='internal'/>\
 </domainsnapshot>"
@@ -390,14 +379,28 @@ unsigned long get_migrate_flags(std::string migration_type)
 
 std::shared_ptr<virDomain> migrate_domain(virDomainPtr domain, virConnectPtr dest_conn, unsigned long flags, const std::string &migrate_uri)
 {
-		FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
-		std::shared_ptr<virDomain> dest_domain(
-			virDomainMigrate(domain, dest_conn, flags, 0, migrate_uri != "" ? migrate_uri.c_str() : nullptr, 0),
-			Deleter_virDomain()
-		);
-		if (!dest_domain)
-			throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
-		return dest_domain;
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate domain.";
+	// Create params only containing migrate uri.
+	std::unique_ptr<virTypedParameter[]> params;
+	size_t params_size = 0;
+	if (migrate_uri != "") {
+		params.reset(new virTypedParameter[1]);
+		strcpy(params[0].field, VIR_MIGRATE_PARAM_URI);
+		params[0].type = VIR_TYPED_PARAM_STRING;
+		// TODO: Fix memory leak
+		params[0].value.s = new char[migrate_uri.size() + 1];
+		strcpy(params[0].value.s, migrate_uri.c_str());
+		params_size = 1;
+	}
+	// Migrate
+	std::shared_ptr<virDomain> dest_domain(
+		virDomainMigrate3(domain, dest_conn, params.get(), params_size, flags),
+		Deleter_virDomain()
+	);
+	// Check for error
+	if (!dest_domain)
+		throw std::runtime_error(std::string("Migration failed: ") + virGetLastErrorMessage());
+	return dest_domain;
 }
 
 bool sort_domains_by_size(virDomainPtr domain1, virDomainPtr domain2)
@@ -428,113 +431,132 @@ bool check_snapshot_required(virDomainPtr domain1, virConnectPtr conn1, virDomai
 	return host1_free_memory < domain2_size || host2_free_memory < domain1_size;
 }
 
-virConnectPtr get_connect_of_domain(virDomainPtr domain)
+// TODO: Refactor (maybe object oriented approach?)
+void Libvirt_hypervisor::swap_migration(const std::string &name, const std::string &name_swap, const std::string &hostname, const std::string &hostname_swap, unsigned long flags, unsigned long flags_swap, bool rdma_migration, const std::string &driver, const std::string &transport, const Migrate &task, std::shared_ptr<fast::Communicator> comm, Time_measurement &time_measurement)
 {
-	auto ptr = virDomainGetConnect(domain);
-	if (ptr == nullptr)
-		throw std::runtime_error(std::string("Error getting connection of domain: ") + virGetLastErrorMessage());
-	return ptr;
-}
-
-size_t get_cpumaplen(virConnectPtr conn)
-{
-	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
-	if (cpus == -1)
-		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
-	return VIR_CPU_MAPLEN(cpus);
-}
-
-void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
-{
-	std::vector<unsigned char> cpumap(maplen, 0);
-	for (auto cpu : cpus)
-		VIR_USE_CPU(cpumap, cpu);
-	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
-		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
-}
-
-void repin_impl(virDomainPtr domain, const std::vector<std::vector<unsigned int>> &vcpu_map)
-{
-	// Get number of CPUs on node
-	auto maplen = get_cpumaplen(get_connect_of_domain(domain));
-	// Create cpumap and pin for each vcpu
-	for (unsigned int vcpu = 0; vcpu != vcpu_map.size(); ++vcpu) {
-		pin_vcpu_to_cpus(domain, vcpu, vcpu_map[vcpu], maplen);
-	}
-}
-
-// RAII-guard to add pause option to migrate flags in constructor and repin and resume in destructor.
-// If no error occures during migration the domain on destination should be set.
-class Repin_guard
-{
-public:
-	Repin_guard(std::shared_ptr<virDomain> domain,
-			unsigned long &flags,
-			const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map,
-			Time_measurement &time_measurement,
-			std::string tag_postfix = "");
-	~Repin_guard() noexcept(false);
-
-	void set_destination_domain(std::shared_ptr<virDomain> dest_domain);
-	void repin();
-private:
-	std::shared_ptr<virDomain> domain;
-	unsigned long &flags;
-	const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map;
-	Time_measurement &time_measurement;
-	std::string tag_postfix;
-
-};
-
-Repin_guard::Repin_guard(std::shared_ptr<virDomain> domain, 
-		unsigned long &flags, 
-		const fast::Optional<std::vector<std::vector<unsigned int>>> &vcpu_map,
-		Time_measurement &time_measurement, 
-		std::string tag_postfix) :
-	domain(domain),
-	flags(flags),
-	vcpu_map(vcpu_map),
-	time_measurement(time_measurement),
-	tag_postfix(std::move(tag_postfix))
-{
-	if (this->tag_postfix != "")
-		this->tag_postfix = "-" + this->tag_postfix;
-	if (vcpu_map.is_valid()) {
-		FASTLIB_LOG(repin_guard_log, trace) << "Setting paused-after-migration flag for repinning.";
-		flags |= VIR_MIGRATE_PAUSED;
-	}
-}
-
-Repin_guard::~Repin_guard() noexcept(false)
-{
-	try {
-		repin();
-	} catch (...) {
-		// Only log exception when unwinding stack, else rethrow exception.
-		if (std::uncaught_exception())
-			FASTLIB_LOG(repin_guard_log, trace) << "Exception while repinning/resuming.";
+	auto conn = connect(hostname, driver, transport);
+	auto conn_swap = connect(hostname_swap, driver, transport);
+	auto domain = find_by_name(conn.get(), name);
+	auto domain_swap = find_by_name(conn_swap.get(), name_swap);
+	// Get domains
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Swap " << name << " with " << name_swap << ".";
+	// Check if domains are in running state
+	check_state(domain.get(), VIR_DOMAIN_RUNNING);
+	check_state(domain_swap.get(), VIR_DOMAIN_RUNNING);
+	// Suspend pscom (resume in destructor)
+	Pscom_handler pscom_handler(task, comm, time_measurement, false);
+	Pscom_handler pscom_handler_swap(task, comm, time_measurement, true);
+	// Guard migration of PCI devices.
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
+	Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement, name);
+	Migrate_devices_guard dev_guard_swap(pci_device_handler, domain_swap, time_measurement, name_swap);
+	Migrate_ivshmem_guard ivshmem_guard(domain, time_measurement, name);
+	Migrate_ivshmem_guard ivshmem_guard_swap(domain_swap, time_measurement, name_swap);
+	// Guard repin of vcpus.
+	// In particular, resume after migration since repin is done after migration in suspended state.
+	Repin_guard repin_guard(domain, flags, task.vcpu_map, time_measurement, name);
+	Repin_guard repin_guard_swap(domain_swap, flags_swap, task.swap_with.get().vcpu_map, time_measurement, name_swap);
+	// Compare size and snapshot-swap if necessary
+	if (check_snapshot_required(domain.get(), conn.get(), domain_swap.get(), conn_swap.get())) {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using snapshot.";
+		// TODO: RAII handler for snapshot for better error recovery
+		// TODO: Move to dedicated function
+		auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(ivshmem_guard) &ivshmem_guard1, decltype(repin_guard) &repin_guard1,
+				decltype(domain) domain2, decltype(name) name2, decltype(conn) conn2, decltype(flags) flags2, decltype(dev_guard) &dev_guard2, decltype(ivshmem_guard) &ivshmem_guard2, decltype(repin_guard) &repin_guard2)
+		{
+			// Suspend vm1
+			time_measurement.tick("downtime-" + name1);
+			time_measurement.tick("suspend-" + name1);
+			// Take snapshot of vm1 and halt.
+			auto snapshot = create_snapshot(domain1.get(), true);
+			time_measurement.tock("suspend-" + name1);
+			// Create migrateuri for vm2
+			std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
+			// Migrate vm2
+			time_measurement.tick("migrate-" + name2);
+			auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags2, migrate_uri);
+			time_measurement.tock("migrate-" + name2);
+			// Set destination domain for guard of vm2
+			repin_guard2.set_destination_domain(dest_domain2);
+			dev_guard2.set_destination_domain(dest_domain2);
+			ivshmem_guard2.set_destination_domain(dest_domain2);
+			// Get snapshotted domain on dest
+			time_measurement.tick("resume-" + name1);
+			// TODO: handle transient domains
+			auto dest_domain1 = find_by_name(conn2.get(), name1);
+			// Redefine snapshot on remote
+			auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
+			// Remove snapshot from src
+			delete_snapshot(snapshot.get(), true);
+			// Revert to snapshot (paused if repin is required)
+			revert_to_snapshot(dest_snapshot.get(), flags1 & VIR_MIGRATE_PAUSED);
+			time_measurement.tock("resume-" + name1);
+			time_measurement.tock("downtime-" + name1);
+			// Remove snapshot from destination
+			delete_snapshot(dest_snapshot.get());
+			// Set destination domain for guard
+			repin_guard1.set_destination_domain(dest_domain1);
+			dev_guard1.set_destination_domain(dest_domain1);
+			ivshmem_guard1.set_destination_domain(dest_domain1);
+		};
+		if (sort_domains_by_size(domain.get(), domain_swap.get()))
+			func(domain, name, conn, hostname, flags, dev_guard, ivshmem_guard, repin_guard, domain_swap, name_swap, conn_swap, flags_swap, dev_guard_swap, ivshmem_guard_swap, repin_guard_swap);
 		else
-			throw;
-	}
-}
-
-void Repin_guard::set_destination_domain(std::shared_ptr<virDomain> dest_domain)
-{
-	// override domain to reattach devices on
-	domain = dest_domain;
-}
-
-void Repin_guard::repin()
-{
-	if (vcpu_map.is_valid()) {
-		time_measurement.tick("repin" + tag_postfix);
-		if (!std::uncaught_exception()) {
-			FASTLIB_LOG(repin_guard_log, trace) << "Repin vcpus.";
-			repin_impl(domain.get(), vcpu_map.get());
+			func(domain_swap, name_swap, conn_swap, hostname_swap, flags_swap, dev_guard_swap, ivshmem_guard_swap, repin_guard_swap, domain, name, conn, flags, dev_guard, ivshmem_guard, repin_guard);
+	} else {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using parallel migration.";
+		time_measurement.tick("migrate");
+		std::mutex time_measurement_mutex;
+		auto mig_func = [=, &time_measurement, &time_measurement_mutex](const std::string &hostname, virDomainPtr domain, virConnectPtr destconn, unsigned long flags, Migrate_devices_guard &dev_guard, Migrate_ivshmem_guard &ivshmem_guard, Repin_guard &repin_guard, const std::string &name)
+		{
+			// Create migrateuri
+			std::string migrate_uri = get_migrate_uri(rdma_migration, hostname);
+			{
+				std::lock_guard<std::mutex> lock(time_measurement_mutex);
+				time_measurement.tick("migrate-" + name);
+			}
+			// Migrate
+			auto dest_domain = migrate_domain(domain, destconn, flags, migrate_uri);
+			{
+				std::lock_guard<std::mutex> lock(time_measurement_mutex);
+				time_measurement.tock("migrate-" + name);
+			}
+			// Set destination domain for guards
+			dev_guard.set_destination_domain(dest_domain);
+			ivshmem_guard.set_destination_domain(dest_domain);
+			repin_guard.set_destination_domain(dest_domain);
+		};
+		{
+			auto mig1 = std::async(std::launch::async, [&](){mig_func(hostname_swap, domain.get(), conn_swap.get(), flags, dev_guard, ivshmem_guard, repin_guard, name);});
+			auto mig2 = std::async(std::launch::async, [&](){mig_func(hostname, domain_swap.get(), conn.get(), flags_swap, dev_guard_swap, ivshmem_guard_swap, repin_guard_swap, name_swap);});
 		}
-		resume_impl(domain.get());
-		time_measurement.tock("repin" + tag_postfix);
+		time_measurement.tock("migrate");
 	}
+}
+
+std::string get_host_ip(const std::string &hostname)
+{
+	struct addrinfo hints = {};
+	hints.ai_family = AF_INET; // ipv4 only
+	hints.ai_socktype = SOCK_STREAM;
+	struct addrinfo *servinfo_tmp_ptr = nullptr;
+	int ret;
+	if ((ret = getaddrinfo(hostname.c_str(), "http", &hints, &servinfo_tmp_ptr)) != 0)
+		throw std::runtime_error("Error getting host ip address: getaddrinfo: " + std::string(gai_strerror(ret)));
+	std::shared_ptr<struct addrinfo> servinfo(servinfo_tmp_ptr, [](struct addrinfo *ai){freeaddrinfo(ai);});
+	struct sockaddr_in *h = nullptr;
+	struct addrinfo *p = nullptr;
+	std::vector<std::string> ips;
+	for (p = servinfo.get(); p != nullptr; p = p->ai_next) {
+		h = reinterpret_cast<struct sockaddr_in *>(p->ai_addr);
+		ips.push_back(inet_ntoa(h->sin_addr));
+	}
+ 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Found " << ips.size() << " IPs for hostname " << hostname << ".";
+	for (auto &ip : ips)
+		FASTLIB_LOG(libvirt_hyp_log, trace) << ip;
+	if (ips.size() == 0)
+		throw std::runtime_error("Error getting host IP address: No IP addresses found.");
+	return ips.front();
 }
 
 //
@@ -593,7 +615,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	}
 	// Start domain (or resume if transient)
 	if (task.transient.is_valid() && task.transient.get())
-		resume_impl(domain.get());
+		resume_domain(domain.get());
 	else
 		create(domain.get());
 	// Attach devices
@@ -624,7 +646,7 @@ void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measureme
 		// Get domain info + check if in running state
 		check_state(domain.get(), VIR_DOMAIN_RUNNING);
 		// Check if domain is persistent
-		auto persistent = is_persistent(domain.get());
+		auto persistent = (driver == "lxctools") ? true : is_persistent(domain.get());
 		// Detach PCI devices
 		pci_device_handler->detach(domain.get());
 		// Destroy or shutdown domain
@@ -687,110 +709,9 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 	auto base_flags = get_migrate_flags(migration_type);
 	// Swap migration or normal migration
 	if (task.swap_with.is_valid()) {
-		// Get domains
-		auto name = task.vm_name;
-		auto name_swap = task.swap_with.get().vm_name;
-		auto hostname = get_hostname();
-		auto hostname_swap = dest_hostname;
-		auto conn = connect(hostname, driver, transport);
-		auto conn_swap = connect(hostname_swap, driver, transport);
-		auto domain = find_by_name(conn.get(), name);
-		auto domain_swap = find_by_name(conn_swap.get(), name_swap);
-		auto flags = base_flags;
-		auto flags_swap = base_flags;
-		FASTLIB_LOG(libvirt_hyp_log, trace) << "Swap with " << name_swap << ".";
-		// Check if domains are in running state
-		check_state(domain.get(), VIR_DOMAIN_RUNNING);
-		check_state(domain_swap.get(), VIR_DOMAIN_RUNNING);
-		// Suspend pscom (resume in destructor)
-		Pscom_handler pscom_handler(task, comm, time_measurement, false);
-		Pscom_handler pscom_handler_swap(task, comm, time_measurement, true);
-		// Guard migration of PCI devices.
-		FASTLIB_LOG(libvirt_hyp_log, trace) << "Create guards for device migration.";
-		Migrate_devices_guard dev_guard(pci_device_handler, domain, time_measurement, name);
-		Migrate_devices_guard dev_guard_swap(pci_device_handler, domain_swap, time_measurement, name_swap);
-		Migrate_ivshmem_guard ivshmem_guard(domain, time_measurement, name);
-		Migrate_ivshmem_guard ivshmem_guard_swap(domain_swap, time_measurement, name_swap);
-		// Guard repin of vcpus.
-		// In particular, resume after migration since repin is done after migration in suspended state.
-		Repin_guard repin_guard(domain, flags, task.vcpu_map, time_measurement, name);
-		Repin_guard repin_guard_swap(domain_swap, flags_swap, task.swap_with.get().vcpu_map, time_measurement, name_swap);
-		// Compare size and snapshot-swap if necessary
-		if (check_snapshot_required(domain.get(), conn.get(), domain_swap.get(), conn_swap.get())) {
-			FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using snapshot.";
-			// TODO: RAII handler for snapshot for better error recovery
-			// TODO: Move to dedicated function
-			auto func = [=, &time_measurement](decltype(domain) domain1, decltype(name) name1, decltype(conn) conn1, decltype(hostname) hostname1, decltype(flags) flags1, decltype(dev_guard) &dev_guard1, decltype(ivshmem_guard) &ivshmem_guard1, decltype(repin_guard) &repin_guard1, 
-					decltype(domain) domain2, decltype(name) name2, decltype(conn) conn2, decltype(flags) flags2, decltype(dev_guard) &dev_guard2, decltype(ivshmem_guard) &ivshmem_guard2, decltype(repin_guard) &repin_guard2)
-			{
-				// Suspend vm1
-				time_measurement.tick("downtime-" + name1);
-				time_measurement.tick("suspend-" + name1);
-				// Take snapshot of vm1 and halt.
-				auto snapshot = create_snapshot(domain1.get(), true);
-				time_measurement.tock("suspend-" + name1);
-				// Create migrateuri for vm2
-				std::string migrate_uri = get_migrate_uri(rdma_migration, hostname1);
-				// Migrate vm2
-				time_measurement.tick("migrate-" + name2);
-				auto dest_domain2 = migrate_domain(domain2.get(), conn1.get(), flags2, migrate_uri);
-				time_measurement.tock("migrate-" + name2);
-				// Set destination domain for guard of vm2
-				repin_guard2.set_destination_domain(dest_domain2);
-				dev_guard2.set_destination_domain(dest_domain2);
-				ivshmem_guard2.set_destination_domain(dest_domain2);
-				// Get snapshotted domain on dest
-				time_measurement.tick("resume-" + name1);
-				// TODO: handle transient domains
-				auto dest_domain1 = find_by_name(conn2.get(), name1);
-				// Redefine snapshot on remote
-				auto dest_snapshot = redefine_snapshot(dest_domain1.get(), snapshot.get());
-				// Remove snapshot from src
-				delete_snapshot(snapshot.get(), true);
-				// Revert to snapshot (paused if repin is required)
-				revert_to_snapshot(dest_snapshot.get(), flags1 & VIR_MIGRATE_PAUSED);
-				time_measurement.tock("resume-" + name1);
-				time_measurement.tock("downtime-" + name1);
-				// Remove snapshot from destination
-				delete_snapshot(dest_snapshot.get());
-				// Set destination domain for guard
-				repin_guard1.set_destination_domain(dest_domain1);
-				dev_guard1.set_destination_domain(dest_domain1);
-				ivshmem_guard1.set_destination_domain(dest_domain1);
-			};
-			if (sort_domains_by_size(domain.get(), domain_swap.get()))
-				func(domain, name, conn, hostname, flags, dev_guard, ivshmem_guard, repin_guard, domain_swap, name_swap, conn_swap, flags_swap, dev_guard_swap, ivshmem_guard_swap, repin_guard_swap);
-			else
-				func(domain_swap, name_swap, conn_swap, hostname_swap, flags_swap, dev_guard_swap, ivshmem_guard_swap, repin_guard_swap, domain, name, conn, flags, dev_guard, ivshmem_guard, repin_guard);
-		} else {
-			FASTLIB_LOG(libvirt_hyp_log, trace) << "Starting swap-migration using parallel migration.";
-			time_measurement.tick("migrate");
-			std::mutex time_measurement_mutex;
-			auto mig_func = [=, &time_measurement, &time_measurement_mutex](const std::string &hostname, virDomainPtr domain, virConnectPtr destconn, unsigned long flags, Migrate_devices_guard &dev_guard, Migrate_ivshmem_guard &ivshmem_guard, Repin_guard &repin_guard, const std::string &name)
-			{
-				// Create migrateuri
-				std::string migrate_uri = get_migrate_uri(rdma_migration, hostname);
-				{
-					std::lock_guard<std::mutex> lock(time_measurement_mutex);
-					time_measurement.tick("migrate-" + name);
-				}
-				// Migrate
-				auto dest_domain = migrate_domain(domain, destconn, flags, migrate_uri);
-				{
-					std::lock_guard<std::mutex> lock(time_measurement_mutex);
-					time_measurement.tock("migrate-" + name);
-				}
-				// Set destination domain for guards
-				dev_guard.set_destination_domain(dest_domain);
-				ivshmem_guard.set_destination_domain(dest_domain);
-				repin_guard.set_destination_domain(dest_domain);
-			};
-			{
-				auto mig1 = std::async(std::launch::async, [&](){mig_func(hostname_swap, domain.get(), conn_swap.get(), flags, dev_guard, ivshmem_guard, repin_guard, name);});
-				auto mig2 = std::async(std::launch::async, [&](){mig_func(hostname, domain_swap.get(), conn.get(), flags_swap, dev_guard_swap, ivshmem_guard_swap, repin_guard_swap, name_swap);});
-			}
-			time_measurement.tock("migrate");
-		}
+		if (driver != "qemu")
+			throw std::runtime_error("Currently swap migration is only supported by the qemu driver.");
+		swap_migration(task.vm_name, task.swap_with.get().vm_name, get_hostname(), dest_hostname, base_flags, base_flags, rdma_migration, driver, transport, task, comm, time_measurement);
 	} else {
 		auto flags = base_flags;
 		// Connect to libvirt
@@ -811,7 +732,10 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		// Connect to destination
 		auto dest_connection = connect(dest_hostname, driver, transport);
 		// Create migrateuri
-		std::string migrate_uri = get_migrate_uri(rdma_migration, dest_hostname);
+		// TODO: Fix libvirt lxctools driver so no IP has to be sent via migrate uri.
+		std::string migrate_uri = (driver == "lxctools") ?
+			get_host_ip(dest_hostname) :
+			get_migrate_uri(rdma_migration, dest_hostname);
 		// Migrate domain
 		time_measurement.tick("migrate");
 		auto dest_domain = migrate_domain(domain.get(), dest_connection.get(), flags, migrate_uri);
@@ -833,7 +757,8 @@ void Libvirt_hypervisor::repin(const Repin &task, Time_measurement &time_measure
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	repin_impl(domain.get(), vcpu_map);
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Repin domain " << task.vm_name << ".";
+	repin_vcpus(domain.get(), vcpu_map);
 }
 
 void Libvirt_hypervisor::suspend(const fast::msg::migfra::Suspend &task, fast::msg::migfra::Time_measurement &time_measurement)
@@ -844,7 +769,8 @@ void Libvirt_hypervisor::suspend(const fast::msg::migfra::Suspend &task, fast::m
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	suspend_impl(domain.get());
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Suspend domain " << task.vm_name << ".";
+	suspend_domain(domain.get());
 }
 
 void Libvirt_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement)
@@ -855,5 +781,6 @@ void Libvirt_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg
 	auto conn = connect("", driver);
 	// Get domain by name
 	auto domain = find_by_name(conn.get(), task.vm_name);
-	resume_impl(domain.get());
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Resume domain " << task.vm_name << ".";
+	resume_domain(domain.get());
 }

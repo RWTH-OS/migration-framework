@@ -5,6 +5,7 @@
 
 #include <libssh/libssh.h>
 #include <fast-lib/log.hpp>
+#include <fast-lib/optional.hpp>
 
 #define EXEC_BUF_SIZE 64
 

@@ -1,9 +1,13 @@
 #include "utility.hpp"
 
+#include <libvirt/virterror.h>
+
 #include <climits>
 #include <cstring>
 #include <unistd.h>
 #include <stdexcept>
+
+// TODO: Consider using utility namespace and splitting the file
 
 std::string convert_and_free_cstr(char *cstr)
 {
@@ -63,4 +67,51 @@ std::string get_hostname()
 		std::runtime_error(std::string("Failed getting hostname: ") + std::strerror(ret));
 	const std::string hostname(hostname_cstr, std::strlen(hostname_cstr));
 	return hostname;
+}
+
+void suspend_domain(virDomainPtr domain)
+{
+	if (virDomainSuspend(domain) == -1)
+		throw std::runtime_error(std::string("Error suspending domain: ") + virGetLastErrorMessage());
+}
+
+void resume_domain(virDomainPtr domain)
+{
+	if (virDomainResume(domain) == -1)
+		throw std::runtime_error(std::string("Error resuming domain: ") + virGetLastErrorMessage());
+}
+
+virConnectPtr get_connect_of_domain(virDomainPtr domain)
+{
+	auto ptr = virDomainGetConnect(domain);
+	if (ptr == nullptr)
+		throw std::runtime_error(std::string("Error getting connection of domain: ") + virGetLastErrorMessage());
+	return ptr;
+}
+
+size_t get_cpumaplen(virConnectPtr conn)
+{
+	auto cpus = virNodeGetCPUMap(conn, nullptr, nullptr, 0);
+	if (cpus == -1)
+		throw std::runtime_error(std::string("Error getting number of CPUs: ") + virGetLastErrorMessage());
+	return VIR_CPU_MAPLEN(cpus);
+}
+
+void pin_vcpu_to_cpus(virDomainPtr domain, unsigned int vcpu, std::vector<unsigned int> cpus, size_t maplen)
+{
+	std::vector<unsigned char> cpumap(maplen, 0);
+	for (auto cpu : cpus)
+		VIR_USE_CPU(cpumap, cpu);
+	if (virDomainPinVcpuFlags(domain, vcpu, cpumap.data(), maplen, VIR_DOMAIN_AFFECT_CURRENT) == -1)
+		throw std::runtime_error(std::string("Error pinning vcpu: ") + virGetLastErrorMessage());
+}
+
+void repin_vcpus(virDomainPtr domain, const std::vector<std::vector<unsigned int>> &vcpu_map)
+{
+	// Get number of CPUs on node
+	auto maplen = get_cpumaplen(get_connect_of_domain(domain));
+	// Create cpumap and pin for each vcpu
+	for (unsigned int vcpu = 0; vcpu != vcpu_map.size(); ++vcpu) {
+		pin_vcpu_to_cpus(domain, vcpu, vcpu_map[vcpu], maplen);
+	}
 }
