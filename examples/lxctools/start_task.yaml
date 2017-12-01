@@ -1,0 +1,5 @@
+---
+task: start vm
+vm-configurations: 
+  - vm-name: cont0
+...

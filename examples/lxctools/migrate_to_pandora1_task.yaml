@@ -1,0 +1,7 @@
+---
+task: migrate vm
+vm-name: cont0
+destination: pandora1
+parameter:
+  migration-type: warm
+...
