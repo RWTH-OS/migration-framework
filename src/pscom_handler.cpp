@@ -25,8 +25,7 @@ unsigned int pscom_process_auto_detection(const std::string &vm_name) {
 		ssh_session session;
 		ssh_channel channel;
 		if ((session = ssh_new()) == NULL) {
-			throw std::runtime_error(
-			    "Failed to create SSH sesseion");
+			throw std::runtime_error("Failed to create SSH sesseion");
 		}
 		ssh_options_set(session, SSH_OPTIONS_HOST, vm_name.c_str());
 		FASTLIB_LOG(pscom_handler_log, trace) << "Connect to " << vm_name << " and determine pscom procs.";
@@ -36,30 +35,21 @@ unsigned int pscom_process_auto_detection(const std::string &vm_name) {
 		unsigned int messages_expected = 0;
 		for (const std::string &cmd : test_commands) {
 			if ((channel = ssh_channel_new(session)) == NULL) {
-				throw std::runtime_error(
-				    "Failed to create SSH channel");
+				throw std::runtime_error("Failed to create SSH channel");
 			}
 			if (ssh_channel_open_session(channel) != SSH_OK) {
-				throw std::runtime_error(
-				    "Failed to open SSH session to: " +
-				    vm_name);
-				//	throw
+				throw std::runtime_error("Failed to open SSH session to: " + vm_name);
 			}
-			if (ssh_channel_request_exec(channel, cmd.c_str()) !=
-			    SSH_OK) {
-				throw std::runtime_error(
-				    "Failed to execute command via SSH: " +
-				    cmd);
+			if (ssh_channel_request_exec(channel, cmd.c_str()) != SSH_OK) {
+				throw std::runtime_error("Failed to execute command via SSH: " + cmd);
 			}
 			char res[EXEC_BUF_SIZE];
 			for (unsigned int bytes_read = -1, total_bytes = 0;
-			     (bytes_read != 0) &&
-			     (total_bytes <= EXEC_BUF_SIZE);
-			     total_bytes += bytes_read) {
-				bytes_read = ssh_channel_read_timeout(
-				    channel,
-				    static_cast<char *>(res + total_bytes),
-				    sizeof(res) - total_bytes, false, -1);
+					(bytes_read != 0) && (total_bytes <= EXEC_BUF_SIZE);
+					total_bytes += bytes_read) {
+				bytes_read = ssh_channel_read_timeout(channel,
+						static_cast<char *>(res + total_bytes),
+						sizeof(res) - total_bytes, false, -1);
 			}
 			messages_expected = std::stoi(res);
 			ssh_channel_send_eof(channel);
@@ -74,9 +64,7 @@ unsigned int pscom_process_auto_detection(const std::string &vm_name) {
 		ssh_free(session);
 		return messages_expected;
 	} catch (const std::exception &e) {
-		throw std::runtime_error(
-		    "Exception while connecting with SSH: " +
-		    std::string(e.what()));
+		throw std::runtime_error("Exception while connecting with SSH: " + std::string(e.what()));
 	}
 }
 
