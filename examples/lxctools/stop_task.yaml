@@ -1,0 +1,6 @@
+---
+task: stop vm
+list:
+  - vm-name: cont0
+    force: false
+...

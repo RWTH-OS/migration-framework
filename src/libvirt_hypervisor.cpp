@@ -44,21 +44,20 @@ FASTLIB_LOG_SET_LEVEL_GLOBAL(libvirt_hyp_log, trace);
  *
  * \param domain The domain to probe.
  */
-void probe_ssh_connection(virDomainPtr domain, const std::chrono::duration<double> &timeout)
+void probe_ssh_connection(const std::string &host, const std::chrono::duration<double> &timeout)
 {
-	auto host = virDomainGetName(domain);
 	ssh::Session session;
-	session.setOption(SSH_OPTIONS_HOST, host);
+	session.setOption(SSH_OPTIONS_HOST, host.c_str());
 	bool success = false;
 	auto start = std::chrono::high_resolution_clock::now();
 	do {
 		try {
-			FASTLIB_LOG(libvirt_hyp_log, trace) << "Try to connect to domain with SSH.";
+			FASTLIB_LOG(libvirt_hyp_log, trace) << "Try to connect to domain (" << host << ") with SSH.";
 			session.connect();
 			FASTLIB_LOG(libvirt_hyp_log, trace) << "Domain is ready.";
 			success = true;
 		} catch (ssh::SshException &e) {
-			FASTLIB_LOG(libvirt_hyp_log, debug) << "Exception while connecting with SSH: " << e.getError();
+			FASTLIB_LOG(libvirt_hyp_log, debug) << "Exception while connecting to " << host << " with SSH: " << e.getError();
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 		session.disconnect();
@@ -589,12 +588,12 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	if (task.xml.is_valid()) {
 		std::string xml = task.xml.get();
 		// Define domain from XML (or start paused if transient)
-		if (task.transient.is_valid() && task.transient.get())
+		if (task.transient.get_or(false))
 			domain = create_from_xml(conn.get(), xml, true);
 		else
 			domain = define_from_xml(conn.get(), xml);
 	} else {
-		if (task.transient.is_valid() && task.transient.get())
+		if (task.transient.get_or(false))
 			throw std::runtime_error("XML description is missing which is required to create a transient domain.");
 		// Find existing domain
 		domain = find_by_name(conn.get(), *task.vm_name);
@@ -614,7 +613,7 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		set_vcpus(domain.get(), task.vcpus);
 	}
 	// Start domain (or resume if transient)
-	if (task.transient.is_valid() && task.transient.get())
+	if (task.transient.get_or(false))
 		resume_domain(domain.get());
 	else
 		create(domain.get());
@@ -629,7 +628,11 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 		attach_ivshmem_device(domain.get(), ivshmem_device);
 	}
 	// Wait for domain to boot
-	probe_ssh_connection(domain.get(), std::chrono::seconds(start_timeout));
+	if (task.probe_with_ssh.get_or(true)) {
+		FASTLIB_LOG(libvirt_hyp_log, trace) << "Wait for domain to boot.";
+		const auto hostname = task.probe_hostname.is_valid() ? task.probe_hostname.get() : get_domain_name(domain.get());
+		probe_ssh_connection(hostname, std::chrono::seconds(start_timeout));
+	}
 }
 
 void Libvirt_hypervisor::stop(const Stop &task, Time_measurement &time_measurement)
