@@ -75,35 +75,37 @@ if (UNIX AND NOT APPLE)
 	endif (LIBRT)
 endif (UNIX AND NOT APPLE)
 
-
-# libponci
+# libponcri
 if (ENABLE_PONCI)
 	ExternalProject_Add(
-		libponci
+		libponcri
 		GIT_REPOSITORY https://github.com/lrr-tum/libponci.git
 		CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
 		CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
 	)
-	ExternalProject_Get_Property(libponci install_dir)
+	ExternalProject_Get_Property(libponcri install_dir)
 	include_directories("${install_dir}/include")
-	set(LIBPONCI "${install_dir}/lib/libponci.a")
+	set(LIBPONCI "${install_dir}/lib/libponcri.a")
 	list(APPEND LIBS "${LIBPONCI}")
 	list(APPEND LIBS_BENCHMARK "${LIBPONCI}")
 endif()
 
 # libssh
+# Use the second OPENSSL_VARS variable to define the location of openssl-1.0 if your system uses openssl-1.1.
+# openssl-1.1 causes problems with libssh.
+set(OPENSSL_VARS "")
+#set(OPENSSL_VARS -DOPENSSL_INCLUDE_DIR=/usr/include/openssl-1.0 -DOPENSSL_SSL_LIBRARY=/usr/lib/openssl-1.0/libssl.so -DOPENSSL_CRYPTO_LIBRARY=/usr/lib/openssl-1.0/libcrypto.so)
 ExternalProject_Add(
 	libssh
 	GIT_REPOSITORY git://git.libssh.org/projects/libssh.git
-	GIT_TAG libssh-0.7.2
+	GIT_TAG libssh-0.7.5
 	CMAKE_COMMAND CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} cmake
-	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DOPENSSL_INCLUDE_DIR=${OPENSSL_INCLUDE_DIR}
+	CMAKE_ARGS -DWITH_ZLIB=OFF -DWITH_SFTP=OFF -DWITH_PCAP=OFF -DWITH_EXAMPLES=OFF -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> ${OPENSSL_VARS}
 )
 ExternalProject_Get_Property(libssh install_dir)
 include_directories(SYSTEM "${install_dir}/include")
 list(APPEND LIBS "${install_dir}/lib/libssh.so")
 #add_definitions(-DLIBSSH_STATIC=1)
-
 
 # Find libvirt
 find_package(LibVirt REQUIRED)
@@ -125,6 +127,7 @@ set(SRC ${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/pscom_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/pci_device_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/ivshmem_handler.cpp
+	${PROJECT_SOURCE_DIR}/src/repin_handler.cpp
 	${PROJECT_SOURCE_DIR}/src/device_utility.cpp
 	${PROJECT_SOURCE_DIR}/src/utility.cpp
 )
@@ -164,8 +167,8 @@ add_dependencies(migfra fastlib libssh)
 add_dependencies(migfra_benchmark fastlib)
 
 if (ENABLE_PONCI)
-	add_dependencies(migfra libponci)
-	add_dependencies(migfra_benchmark libponci)
+	add_dependencies(migfra libponcri)
+	add_dependencies(migfra_benchmark libponcri)
 endif()
 
 target_link_libraries(migfra ${LIBS})

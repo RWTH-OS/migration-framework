@@ -88,6 +88,7 @@ public:
 private:
 	std::string generate_disk_image(const std::string base_image_path, const std::string name) const;
 	std::vector<std::string> create_domain_xmls(const virDomainPtr domain, const std::string base_image, const std::vector<fast::msg::migfra::DHCP_info> dhcp_info_vec) const;
+	void swap_migration(const std::string &name, const std::string &name_swap, const std::string &hostname, const std::string &hostname_swap, unsigned long flags, unsigned long flags_swap, bool rdma_migration, const std::string &driver, const std::string &transport, const fast::msg::migfra::Migrate &task, std::shared_ptr<fast::Communicator> comm, fast::msg::migfra::Time_measurement &time_measurement);
 
 	std::shared_ptr<PCI_device_handler> pci_device_handler;
 	std::vector<std::string> nodes;

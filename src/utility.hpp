@@ -4,6 +4,7 @@
 #include <libvirt/libvirt.h>
 
 #include <string>
+#include <vector>
 
 //
 // Some deleter to be used with smart pointers.
@@ -62,5 +63,16 @@ unsigned long long get_memory_size(virDomainPtr domain);
 
 // Get hostname
 std::string get_hostname();
+
+// Suspend domain
+void suspend_domain(virDomainPtr domain);
+
+// Resume domain
+void resume_domain(virDomainPtr domain);
+
+// Repinning the vcpus to cpus
+void repin_vcpus(virDomainPtr domain, const std::vector<std::vector<unsigned int>> &vcpu_map);
+
+
 
 #endif
