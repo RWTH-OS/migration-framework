@@ -192,6 +192,7 @@ parameter:
   mode: auto | compact | scatter
   migration-type: live | warm | offline
   rdma-migration: true | false
+  overbooking: true | false
   pscom-hook-procs: <amount of pscom processes>
 ```
 * id: Is returned in the response message for the matching of tasks and results.
@@ -203,10 +204,11 @@ parameter:
   compact: fill up destination by destination
   scatter: equally distribute the domains to the provided destinations
 * migration-type:
-  live: keep domain running (e.g., pre-copy migration)
-  warm: suspend domain before migration
-  offline: use file system for migraiton
+  - live: keep domain running (e.g., pre-copy migration)
+  - warm: suspend domain before migration
+  - offline: use file system for migraiton
 * rdma-migration: migrate domains by using the RDMA transport
+* overbooking: allow an overbooking of the destination nodes
 * pscom-hook-procs: the amount of pscom processes per domain (equal distribution assumed)
 
 #### Repin CPUs
@@ -356,6 +358,9 @@ This message is emitted once all domains are move to other cluster nodes.
 ```
 result: node evacuated
 id: <uuid>
+time-measurement:
+  - <tag>: <duration in sec>
+  - ..
 list
   - vm-name: <vm name>
     status: <success | error>
@@ -370,7 +375,8 @@ list
         node
 * details: provides detailed information in case of failures; in case of
            "success" it contains the amount of retries for that domain
-* time-measurement: returns a list of tags with the time measurements
+* time-measurement: returns a list of tags with the time measurements per domain
+  and for the whole evacuation process
 * Expected behavior:
   In case of success, the source node does not have running domains anymore
 
