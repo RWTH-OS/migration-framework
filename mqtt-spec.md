@@ -52,7 +52,7 @@ id: <uuid>
 vm-configurations:
   - vm-name: <string>
     memory: <unsigned long (in kiB)>
-    vcpus: <Anzahl>
+    vcpus: <count>
   - xml: <XML string>
     pci-ids:
       - vendor: <vendor-id>
@@ -61,26 +61,25 @@ vm-configurations:
     transient: <bool>
   - ..
 ```
-* id: Wird bei result Nachricht mit zurück geschickt, um die Zugehörigkeit zwischen task/result erfassen zu können.
-* VM kann entweder per "name" gestartet werden oder per "xml"
-* vm-name: Es wird eine schon definierte VM gesucht (virDomainLookupByName)
-* xml: Es wird eine VM anhand des XML-Strings definiert (virDomainDefineXML)
-* overlay-image & base-image sind im XML definiert.
-* memory: Setzt memory und maxmemory. (optional)
-* vcpus: Setzt vcpus und maxvcpus. (optional)
-* pci-ids: Ermöglicht eine Liste von PCI-IDs anzugeben, um je ein PCI-Device mit dieser ID zu attachen.
-  PCI-IDs geben den Geräte-Typ an und können mithilfe von "lspci -nn" leicht herausgefunden werden.
-  Sie bestehen aus vendor und device ID.
-  Bsp.:
+* id: The ID is included in the result message and may be used for tracking according tasks and results.
+* VM may be started either by  "name" or by "xml".
+* vm-name: Searches for an already defined VM (virDomainLookupByName).
+* xml: A new VM is being defined using the XML string (virDomainDefineXML).
+* overlay-image & base-image are defined in the XML.
+* memory: Set memory and maxmemory (optional).
+* vcpus: Set vcpus and maxvcpus (optional).
+* pci-ids: May be used to pass a list of PCI-IDs in order to attach PCI devices with according IDs.
+  PCI-IDs describe the device type and may be easily detected for a specific device using "lspci -nn".
+  The PCI-ID consists of vendor ID and device ID.
+  e.g.:
 ```
   - vendor: 0x15b3
     device: 0x1004
 ```
-* transient: Ermöglicht ein VM mittels XML als transiente Domain zu starten. Eine transiente Domain ist nur während der Laufzeit definiert und ist nach dem Herunterfahren nicht mehr für Libvirt bekannt. Hier ist die Übergabe des XML notwendig. (optional)
-* Erwartetes Verhalten:
-  VMs werden auf dem entsprechenden Host gestartet.
-  Es wird gewartet bis die VMs bereit (erreichbar mit ssh) sind bevor result geschickt wird.
-* Antwort: Default result status? Oder doch lieber modifiziert mit eindeutige IDs für die VMs?
+* transient: May be used to start a VM as transient domain. A transient domain is only defined during runtime and becomes unknown to libvirt after being shut down. Here, the domain has to be started using XML. (optional)
+* Expected behavior:
+  Starts domains on specified host.
+  Sends result message after waiting for the domain to properly start (probing with ssh).
 
 #### Stop Domain
 * topic: fast/migfra/\<hostname\>/task
@@ -93,15 +92,15 @@ id: <uuid>
 list:
   - vm-name: <vm name>
   - vm-name: <vm name>
-    force: <true/false>
-    undefine: <true/false>
+    force: <bool>
+    undefine: <bool>
   - ..
 ```
-* force: Ermöglicht es optional die VM unmittelbar zu beenden (virDomainDestroy statt virDomainShutdown; default:`false`)
-* undefine: Ermöglicht es optional die VM unmittelbar nach dem Herunterfahren aus der Liste der libvirt bekannten VMs herauszunehmen (implizit entspricht dies dem Aufruf `virsh undefine <vm name>`; default: `false`)
-* Erwartetes Verhalten:
-  VM wird gestoppt.
-* Antwort: Default result status
+* force: Enables forced shutdown of the domain using virDomainDestroy instead of virDomainShutdown (default:`false`).
+* undefine: Undefine the domain after shutdown which works like `virsh undefine <vm name>` (default: `false`).
+* Expected behavior:
+  Domains are stopped.
+* Answer: Default result status.
 
 #### Suspend Domain
 Stop to assign the domain(s) to any of the physical CPUs.
@@ -151,26 +150,25 @@ task: migrate vm
 id: <uuid>
 vm-name: <vm name>
 destination: <destination hostname>
-time-measurement: true
+time-measurement: <bool>
 parameter:
   retry-counter: <counter>
-  migration-type: live | warm | offline
-  rdma-migration: true | false
-  pscom-hook-procs: <Anzahl der Prozesse>
+  migration-type: <live | warm | offline>
+  rdma-migration: <bool>
+  pscom-hook-procs: <count of processes>
   vcpu-map: [[<cpus>], [<cpus>], ...]
   swap-with:
     vm-name: <vm name>
-    pscom-hook-procs: <Anzahl der Prozesse>
+    pscom-hook-procs: <count of processes>
     vcpu-map: [[<cpus>], [<cpus>], ...]
 ```
-* time-measurement: Gibt Informationen über die Dauer einzelner Phasen im result zurück. (Optional)
-* pscom-hook-procs: Anzahl der Prozesse deren pscom Schicht unterbrochen werden muss. (Optional)
-* vcpu-map: Ermöglicht die Neuzuordnung von VCPUs zu CPUs auf dem Zielsystem. Siehe [CPU Repin](#cpu-repin). (Optional)
-* swap-with: Ermöglicht zwei VMs zu tauschen. Hier kann für die zweite VM ebenfalls optional pscom-hook-procs und vcpu-map angegeben werden. Die VM, welche unter swap-with angegeben wird, muss auf dem "destination"-Host laufen.
-* Erwartetes Verhalten:
-  VM wird vom Migrationsframework gestartet und anschließend wird eine
-  entsprechende Statusinformation über den 'scheduler' channel gechickt.
-* Antwort: Default result status
+* time-measurement: Returns the duration of each migration phase in the result message. (Optional)
+* pscom-hook-procs: Number of processes of which the pscom layer has to be suspended. (Optional)
+* vcpu-map: Enables to reassign VCPUs to CPUs on the destination system. See [CPU Repin](#cpu-repin). (Optional)
+* swap-with: Enables to swap two domains. Here, pscom-hook-procs and vcpu-map may be specified for the second domain. The domain which is specified in swap-with has to run on the "destination" host.
+* Expected behavior:
+  Domain is being migrated to the destination node.
+* Answer: Default result status
 
 
 #### Evacuate node
@@ -183,17 +181,17 @@ computing node.
 host: <string>
 task: evacuate node
 id: <uuid>
-time-measurement: true | false
+time-measurement: <bool>
 destinations:
-  - <destinationhostname>
+  - <destination hostname>
   - ...
 parameter:
   retry-counter: <counter>
-  mode: auto | compact | scatter
-  migration-type: live | warm | offline
-  rdma-migration: true | false
-  overbooking: true | false
-  pscom-hook-procs: <amount of pscom processes>
+  mode: <auto | compact | scatter>
+  migration-type: <live | warm | offline>
+  rdma-migration: <bool>
+  overbooking: <bool>
+  pscom-hook-procs: <count of processes>
 ```
 * id: Is returned in the response message for the matching of tasks and results.
 * destinations: a lists of possible destination nodes
@@ -222,12 +220,12 @@ id: <uuid>
 vm-name: <string>
 vcpu-map: [[<cpus>], [<cpus>], ...]
 ```
-* vcpu-map enthält die Zuordnung von VCPUs zu CPUs.
-Bsp. Zuordnung von VCPU 0 zu CPUs 4, 1 zu 5, usw.:
+* vcpu-map contains assignment of VCPUs to CPUs.
+E.g. Assignment of VCPU 0 to CPUs 4, 1 to 5, 2 to 6, and 3 to 7:
 ```
 vcpu-map: [[4],[5],[6],[7]]
 ```
-Bsp. Zuordnung von VCPUs 0-4 zu CPUs 4-7:
+E.g. Assignment of VCPUs 0-4 to CPUs 4-7:
 ```
 vcpu-map: [[4,5,6,7],[4,5,6,7],[4,5,6,7],[4,5,6,7]]
 ```
@@ -245,26 +243,22 @@ result: vm started
 id: <uuid>
 list:
   - vm-name: <vm-hostname>
-    status: success | error
+    status: <success | error>
     details: <string>
     process-id: <process id of the vm>
   - vm-name: <vm-hostname>
-    status: success | error
+    status: <success | error>
     process-id: <process id of the vm>
   - ..
 ```
-* details: Ermöglicht detailierte Fehlerinformationen zurückzugeben.
-* Erwartetes Verhalten:
-  Der für den Knoten zuständige Scheduler empfängt die Nachricht und
-  startet die Anwendung in der VM.
-* Implementierung:
-  Über mqtt_publish in Startup Skript der VM. Hierbei gibt es die
-  folgenden Möglichkeiten:
-	1. VM sendet an migfra "vm ready", migfra sendet dies gebündelt an
-	   scheduler mit "vm started"
-	2. Migfra wartet bis alle VMs der task "start vm" per SSH erreichbar
-	   sind und schickt gebündelt eine Liste der Stati an den zuständigen
-	   scheduler.
+* details: Here, detailed information on the error may be included.
+* Expected behavior:
+  The scheduler responsible for the node receives the message and starts the application in the domain.
+* Implementation:
+  Using mqtt_publish in startup script in domain. Here, we have to possible ways:
+	1. Domain sends "vm ready" to migfra and migfra sends it concluded to the scheduler as "vm started".
+	2. Migfra waits for all domains to be contactable using SSH and sends a summary result to the scheduler.
+  Currently 2. is used in implementation.
 
 #### Domain stopped
 This message is emitted once the domain is shutdown successfully.
@@ -276,16 +270,16 @@ result: vm stopped
 id: <uuid>
 list:
   - vm-name: <vm-hostname>
-    status: success | error
+    status: <success | error>
     details: <string>
   - vm-name: <vm-hostname>
-    status: success | error
+    status: <success | error>
   - ..
 ```
 
 * details: Ermöglicht detailierte Fehlerinformationen zurückzugeben.
-* Erwartetes Verhalten:
-  VM aufräumen? Log files für den Nutzer rauskopieren?
+* Expected behavior:
+  Cleanup domain? Extract log files from domain for user?
 
 #### Domain suspended
 This message is emitted once the domain is suspended successfully.
@@ -297,14 +291,14 @@ result: vm suspended
 id: <uuid>
 list:
   - vm-name: <vm-hostname>
-    status: success | error
+    status: <success | error>
     details: <string>
   - vm-name: <vm-hostname>
-    status: success | error
+    status: <success | error>
   - ..
 ```
 
-* details: Ermöglicht detailierte Fehlerinformationen zurückzugeben.
+* details: Here, detailed information on the error may be included.
 
 #### Domain resumed
 This message is emitted once the domain is resumed successfully.
@@ -323,7 +317,7 @@ list:
   - ..
 ```
 
-* details: Ermöglicht detailierte Fehlerinformationen zurückzugeben.
+* details: Here, detailed information on the error may be included.
 
 
 
@@ -345,10 +339,10 @@ time-measurement:
   - <tag>: <duration in sec>
   - ..
 ```
-* details: Ermöglicht detailierte Fehlerinformationen oder bei "success" die Anzahl der Versuche zurückzugeben.
-* time-measurement: Falls Zeitmessungen im task aktiviert wurden, wird hier eine Liste von Tags mit Zeitdauern zurückgegeben.
-* Erwartetes Verhalten:
-  Scheduler markiert ursprüngliche Ressource als frei.
+* details: Here, detailed information on the error may be included or the number of retries on success.
+* time-measurement: If time-measurement was activated in the task, a map of tags with durations is returned here.
+* Expected behavior:
+  Scheduler marks original resources as free.
 
 #### Node evacutated
 This message is emitted once all domains are move to other cluster nodes.
@@ -393,7 +387,7 @@ vm-name: <vm name>
 status: <success | error>
 details: <error-string>
 ```
-* details: Ermöglicht detailierte Fehlerinformationen zurückzugeben.
+* details: Here, detailed information on the error may be included.
 
 #### Shutdown connections
 This message requests the pscom layer to execute the S/R protocol for all
@@ -405,8 +399,8 @@ non-migratable connections.
 task: suspend
 ```
 
-* Erwartetes Verhalten:
-  pscom faehr suspend-Protokoll ab
+* Expected behavior:
+  pscom executes suspend protocol.
 
 #### Reconnect connections
 This message requests the pscom-layer to release the previously shut down
@@ -418,5 +412,5 @@ connections.
 task: resume
 ```
 
-* Erwartetes Verhalten:
-  pscom gibt Verbindungen frei
+* Expected behavior:
+  pscom resumes connections.
