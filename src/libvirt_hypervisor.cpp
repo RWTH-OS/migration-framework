@@ -29,6 +29,7 @@
 #include <chrono>
 #include <mutex>
 #include <regex>
+#include <functional>
 
 using namespace fast::msg::migfra;
 
@@ -98,6 +99,7 @@ std::string get_domain_name(virDomainPtr domain)
 
 }
 
+// TODO: If this function throws there is a memory leak due to use of free().
 std::vector<std::string> get_active_domain_names(virConnectPtr conn)
 {
 	virDomainPtr *domains;
@@ -113,6 +115,19 @@ std::vector<std::string> get_active_domain_names(virConnectPtr conn)
 	free(domains);
 	return vm_names;
 }
+
+/**
+ * \brief Returns the number of CPUs for a host.
+ * TODO: Check for actually online CPUs
+ */
+int get_host_cpu_count(virConnectPtr conn)
+{
+	int cpu_count = -1;
+	if ((cpu_count = virNodeGetCPUMap(conn, nullptr, nullptr, 0)) == -1)
+		throw std::runtime_error("Error getting node ");
+	return cpu_count;
+}
+
 
 /**
  * \brief Define a domain using an xml config.
@@ -157,7 +172,7 @@ std::shared_ptr<virDomain> create_from_xml(virConnectPtr conn, const std::string
 /**
  * \brief Find a domain with the specified name.
  *
- * \param conn The connection to search the domain on.
+ * \param conn The connection to search for the domain on.
  * \param name The name of the domain.
  */
 std::shared_ptr<virDomain> find_by_name(virConnectPtr conn, const std::string &name)
@@ -700,7 +715,7 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 {
 	const std::string &dest_hostname = task.dest_hostname;
 	auto migration_type = task.migration_type.is_valid() ? task.migration_type.get() : "warm";
-	bool rdma_migration = task.rdma_migration.is_valid() ? task.rdma_migration.get() : false;;
+	bool rdma_migration = task.rdma_migration.is_valid() ? task.rdma_migration.get() : false;
 	auto driver = task.driver.is_valid() ? task.driver.get() : default_driver;
 	auto transport = task.transport.is_valid() ? task.transport.get() : default_transport;
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "Migrate " << task.vm_name << " to " << task.dest_hostname << ".";
@@ -749,6 +764,138 @@ void Libvirt_hypervisor::migrate(const Migrate &task, Time_measurement &time_mea
 		dev_guard.set_destination_domain(dest_domain);
 		ivshmem_guard.set_destination_domain(dest_domain);
 	}
+}
+
+int get_capacity(const std::string &host, const std::string &driver, const std::string transport = "")
+{
+	auto conn = connect(host, driver, transport);
+	auto cpu_count = get_host_cpu_count(conn.get());
+	auto domain_count = get_active_domain_names(conn.get()).size();
+	return cpu_count - domain_count;
+}
+
+std::tuple<std::deque<std::pair<std::string, int>> &, std::mutex &> get_destinations_capacities()
+{
+	static std::mutex dest_caps_mutex;
+	static std::deque<std::pair<std::string, int>> dest_caps;
+	return std::tie(dest_caps, dest_caps_mutex);
+}
+
+void init_destinations_capacities(const std::vector<std::string> &destinations, const std::string &driver, const std::string &transport, bool overbooking)
+{
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "init dest_caps";
+	auto &dest_caps = std::get<0>(get_destinations_capacities());
+	dest_caps.clear();
+	for (const auto &destination : destinations) {
+		dest_caps.emplace_back(destination, get_capacity(destination, driver, transport));
+	}
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "dest_caps.size() = " << dest_caps.size();
+	// If no overbooking allowed -> drop all full hosts
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "overbooking:" << overbooking;
+	if (!overbooking) {
+		dest_caps.erase(std::remove_if(dest_caps.begin(), dest_caps.end(), 
+				[](const std::pair<std::string, int> &x){return x.second < 1;}),
+				dest_caps.end());
+	}
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "dest_caps.size() = " << dest_caps.size();
+}
+
+std::vector<std::shared_ptr<Task>> Libvirt_hypervisor::get_evacuate_tasks(const Task_container &task_cont)
+{
+	if (task_cont.type(true) != "node evacuated")
+		throw std::runtime_error("No evacuate tasks.");
+	auto base_task = std::dynamic_pointer_cast<Evacuate>(task_cont.tasks.front());
+	auto overbooking = base_task->overbooking.get_or(true);
+	auto driver = base_task->driver.get_or(default_driver);
+	auto transport = base_task->transport.get_or(default_transport);
+	auto conn = connect("", driver);
+	auto domain_names = get_active_domain_names(conn.get());
+	std::vector<std::shared_ptr<Task>> tasks;
+	for (auto &domain_name : domain_names) {
+		// TODO: Implement copy constructor for Evacuate task
+		auto task = std::make_shared<Evacuate>();
+		task->destinations = base_task->destinations;
+		task->mode = base_task->mode;
+		task->overbooking = base_task->overbooking;
+		task->retry_counter = base_task->retry_counter;
+		task->migration_type = base_task->migration_type;
+		task->rdma_migration = base_task->rdma_migration;
+		task->pscom_hook_procs = base_task->pscom_hook_procs;
+		task->driver = base_task->driver;
+		task->transport = base_task->transport;
+		task->vm_name.set(domain_name);
+		tasks.push_back(task);
+	}
+	init_destinations_capacities(base_task->destinations, driver, transport, overbooking);
+	return tasks;
+}
+
+Migrate conv_evacuate_to_migrate(const std::string &domain_name, const std::string &destination, const Evacuate &task)
+{
+	// Convert Evacuate task to Migrate task
+	Migrate mig_task;
+	mig_task.vm_name = domain_name;
+	mig_task.dest_hostname = destination;
+	mig_task.migration_type = task.migration_type;
+	mig_task.rdma_migration = task.rdma_migration;
+	mig_task.pscom_hook_procs = task.pscom_hook_procs;
+	mig_task.transport = task.transport;
+	mig_task.concurrent_execution = task.concurrent_execution;
+	mig_task.driver = task.driver;
+	return mig_task;
+}
+
+std::string get_next_destination(std::deque<std::pair<std::string, int>> &dest_caps, bool overbooking, const std::string &mode, std::mutex &m)
+{
+	using dest_caps_deque = std::deque<std::pair<std::string, int>>;
+	// To few destinations to migrate to -> error
+	if (dest_caps.empty())
+		throw std::runtime_error("No destination host left to evacuate to.");
+	// Lock for thread safety
+	std::lock_guard<std::mutex> lock(m);
+	// Use first destination in list
+	auto destination = dest_caps.front().first;
+	// Reduce capacity of destination
+	--dest_caps.front().second;
+	if (mode == "compact") { // fill host, then go to next
+		if (dest_caps.front().second < 1) { // if host full/overbooked
+			if (!overbooking) { // no overbooking -> drop host
+				dest_caps.pop_front();
+			} else { // overbooking -> rotate to next host
+				std::rotate(dest_caps.begin(), dest_caps.begin() + 1, dest_caps.end());
+			}
+		}
+	} else if (mode == "scatter") { // rotate through destinations
+		if (dest_caps.front().second < 1 && !overbooking) {
+				dest_caps.pop_front();
+		} else {
+			std::rotate(dest_caps.begin(), dest_caps.begin() + 1, dest_caps.end());
+		}
+	} else if (mode == "auto") { // sort to distribute domains water-filling-like
+		std::sort(dest_caps.begin(), dest_caps.end(),
+				[](dest_caps_deque::const_reference a, dest_caps_deque::const_reference b)
+				{return a.second > b.second;});
+	}
+	return destination;
+}
+
+void Libvirt_hypervisor::evacuate(const Evacuate &task, Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm)
+{
+	auto mode = task.mode.get_or("auto");
+	auto overbooking = task.overbooking.get_or(true);
+	auto driver = task.driver.get_or(default_driver);
+	auto transport = task.transport.get_or(default_transport);
+	auto domain_name = task.vm_name.get();
+	// Connect to libvirt
+	auto conn = connect("", driver);
+	// Get cap per destination and mutex for synchronization in pair
+	auto dest_caps_tuple = get_destinations_capacities();
+	const auto &destination = get_next_destination(std::get<0>(dest_caps_tuple), overbooking, mode, std::get<1>(dest_caps_tuple));
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Evacuate domain " << domain_name << " to " << destination << ".";
+	// Convert task
+	auto mig_task = conv_evacuate_to_migrate(domain_name, destination, task);
+	// Migrate
+	migrate(mig_task, time_measurement, comm);
 }
 
 void Libvirt_hypervisor::repin(const Repin &task, Time_measurement &time_measurement)

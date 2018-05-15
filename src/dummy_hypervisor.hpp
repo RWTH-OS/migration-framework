@@ -59,6 +59,10 @@ public:
 	 */
 	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
 	/**
+	 * \brief Method to evacuate a host.
+	 */
+	void evacuate(const fast::msg::migfra::Evacuate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
+	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *
 	 * Dummy method that does not do anything.
@@ -79,7 +83,13 @@ public:
 	 * Never throws if never_throw is true, else it throws.
 	 */
 	void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) override;
-
+	/**
+ 	 * \brief Method to generate a task list for Evacuate.
+	 *
+	 * Dummy mresume that does not do anything.
+	 * Never throws if never_throw is true, else it throws.
+ 	 */
+	std::vector<std::shared_ptr<fast::msg::migfra::Task>> get_evacuate_tasks(const fast::msg::migfra::Task_container &task_cont) override;
 private:
 	const bool never_throw;
 };
