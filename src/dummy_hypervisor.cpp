@@ -36,6 +36,13 @@ void Dummy_hypervisor::migrate(const fast::msg::migfra::Migrate &task, fast::msg
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
 }
 
+void Dummy_hypervisor::evacuate(const fast::msg::migfra::Evacuate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm)
+{
+	(void) task; (void) time_measurement; (void) comm;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
+}
+
 void Dummy_hypervisor::repin(const fast::msg::migfra::Repin &task, fast::msg::migfra::Time_measurement &time_measurement)
 {
 	(void) task; (void) time_measurement;
@@ -55,4 +62,12 @@ void Dummy_hypervisor::resume(const fast::msg::migfra::Resume &task, fast::msg::
 	(void) task; (void) time_measurement;
 	if (!never_throw)
 		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
+}
+
+std::vector<std::shared_ptr<fast::msg::migfra::Task>> Dummy_hypervisor::get_evacuate_tasks(const fast::msg::migfra::Task_container &task_cont)
+{
+	(void) task_cont;
+	if (!never_throw)
+		throw std::runtime_error("Dummy_hypervisor is set to throw always if called.");
+	return std::vector<std::shared_ptr<fast::msg::migfra::Task>>();
 }

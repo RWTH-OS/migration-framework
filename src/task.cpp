@@ -77,11 +77,12 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 {
 	auto func = [task, hypervisor, comm]
 	{
-		Time_measurement time_measurement(task->time_measurement.is_valid() ? task->time_measurement.get() : false);
+		Time_measurement time_measurement(task->time_measurement.get_or(false));
 		std::string vm_name;
 		auto start_task = std::dynamic_pointer_cast<Start>(task);
 		auto stop_task = std::dynamic_pointer_cast<Stop>(task);
 		auto migrate_task = std::dynamic_pointer_cast<Migrate>(task);
+		auto evacuate_task = std::dynamic_pointer_cast<Evacuate>(task);
 		auto repin_task = std::dynamic_pointer_cast<Repin>(task);
 		auto suspend_task = std::dynamic_pointer_cast<Suspend>(task);
 		auto resume_task = std::dynamic_pointer_cast<Resume>(task);
@@ -115,6 +116,11 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 			} else if (migrate_task) {
 				vm_name = migrate_task->vm_name;
 				hypervisor->migrate(*migrate_task, time_measurement, comm);
+			} else if (evacuate_task) {
+				if (task->concurrent_execution.get_or(true))
+					FASTLIB_LOG(migfra_task_log, warn) << "Concurrent execution might result in uneven distribution of domains.";
+				vm_name = evacuate_task->vm_name.get();
+				hypervisor->evacuate(*evacuate_task, time_measurement, comm);
 			} else if (repin_task) {
 				vm_name = repin_task->vm_name;
 				hypervisor->repin(*repin_task, time_measurement);
@@ -132,25 +138,25 @@ std::future<Result> execute(std::shared_ptr<Task> task,
 		time_measurement.tock("overall");
 		return Result(vm_name, "success", time_measurement);
 	};
-	bool concurrent_execution = !task->concurrent_execution.is_valid() || task->concurrent_execution.get();
+	bool concurrent_execution = task->concurrent_execution.get_or(true);
 	return std::async(concurrent_execution ? std::launch::async : std::launch::deferred, func);
 }
 
 
 void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hypervisor, std::shared_ptr<fast::Communicator> comm)
 {
-	auto &id = task_cont.id.is_valid() ? task_cont.id.get() : "";
+	auto &id = task_cont.id.get_or("");
 	if (task_cont.tasks.empty()) {
 		send_parse_error(comm, "Empty task container executed.", id);
 		return;
 	}
-	/// \todo In C++14 unique_ptr for sub_tasks and init capture to move in lambda should be used!
-	auto &tasks = task_cont.tasks;
 	auto result_type = task_cont.type(true);
 	if (result_type == "quit") {
 		send_quit_result(comm, id);
 		throw std::runtime_error("quit");
 	}
+	// If Evacuate task -> get one task for every local domain
+	auto &tasks = result_type == "node evacuated" ? hypervisor->get_evacuate_tasks(task_cont) : task_cont.tasks;
 	auto func = [hypervisor, comm, tasks, result_type, id]
 	{
 		std::vector<std::future<Result>> future_results;
@@ -161,7 +167,7 @@ void execute(const Task_container &task_cont, std::shared_ptr<Hypervisor> hyperv
 			results.push_back(future_result.get());
 		comm->send_message(Result_container(result_type, results, id).to_string());
 	};
-	bool concurrent_execution = !task_cont.concurrent_execution.is_valid() || task_cont.concurrent_execution.get();
+	bool concurrent_execution = task_cont.concurrent_execution.get_or(true);
 	concurrent_execution ? std::thread([func] {Thread_counter cnt; func();}).detach() : func();
 }
 

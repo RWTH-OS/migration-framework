@@ -58,6 +58,10 @@ public:
 	 */
 	virtual void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) = 0;
 	/**
+	 * \brief Method to evacuate a host.
+	 */
+	virtual void evacuate(const fast::msg::migfra::Evacuate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) = 0;
+	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *
 	 * Calls libvirt API to reassign CPUs to VCPUs.
@@ -75,6 +79,10 @@ public:
 	 * A pure virtual method to provide an interface for resuming the execution of a virtual machine.
 	 */
 	virtual void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) = 0;
+	/**
+ 	 * \brief Method to generate a task list for Evacuate.
+ 	 */
+	virtual std::vector<std::shared_ptr<fast::msg::migfra::Task>> get_evacuate_tasks(const fast::msg::migfra::Task_container &task_cont) = 0;
 };
 
 #endif

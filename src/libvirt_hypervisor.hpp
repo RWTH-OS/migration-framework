@@ -66,6 +66,10 @@ public:
 	 */
 	void migrate(const fast::msg::migfra::Migrate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
 	/**
+	 * \brief Method to evacuate an entire host, i.e., migrate all domains away from this host.
+	 */
+	void evacuate(const fast::msg::migfra::Evacuate &task, fast::msg::migfra::Time_measurement &time_measurement, std::shared_ptr<fast::Communicator> comm) override;
+	/**
 	 * \brief Method to repin vcpus of a virtual machine.
 	 *
 	 * Calls libvirt API to reassign CPUs to VCPUs.
@@ -84,6 +88,10 @@ public:
 	 */
 	void resume(const fast::msg::migfra::Resume &task, fast::msg::migfra::Time_measurement &time_measurement) override;
 
+	/**
+ 	 * \brief Method to generate a task list for Evacuate.
+ 	 */
+	std::vector<std::shared_ptr<fast::msg::migfra::Task>> get_evacuate_tasks(const fast::msg::migfra::Task_container &task_cont) override;
 private:
 
 	void swap_migration(const std::string &name, const std::string &name_swap, const std::string &hostname, const std::string &hostname_swap, unsigned long flags, unsigned long flags_swap, bool rdma_migration, const std::string &driver, const std::string &transport, const fast::msg::migfra::Migrate &task, std::shared_ptr<fast::Communicator> comm, fast::msg::migfra::Time_measurement &time_measurement);
