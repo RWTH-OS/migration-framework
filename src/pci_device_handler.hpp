@@ -54,8 +54,10 @@ struct Device
 {
 	Device(const std::string &xml_desc);
 	Device(std::string &&xml_desc);
+	Device(PCI_address &pci_addr);
 
 	std::string to_hostdev_xml() const;
+	std::string to_hostdev_xml(PCI_address &pci_addr) const;
 
 	const std::string xml_desc;
 	const PCI_address address;
@@ -82,7 +84,8 @@ public:
 	/**
 	 * \brief Attach device of certain type to domain.
 	 */
-	void attach(virDomainPtr domain, PCI_id pci_id);
+	void attach_by_id(virDomainPtr domain, PCI_id pci_id);
+	bool attach_device(virDomainPtr domain, std::shared_ptr<Device> device);
 	/**
 	 * \brief Detach device of certain type to domain.
 	 *

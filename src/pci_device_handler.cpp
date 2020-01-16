@@ -152,6 +152,32 @@ Device::Device(std::string &&xml_desc) :
 {
 }
 
+Device::Device(PCI_address &pci_addr) :
+	xml_desc(to_hostdev_xml(pci_addr)),
+	address(pci_addr),
+	attached_hint(false)
+{
+}
+
+
+std::string Device::to_hostdev_xml(PCI_address &pci_addr) const
+{
+	boost::property_tree::ptree hostdev_ptree;
+	hostdev_ptree.put("hostdev.<xmlattr>.mode", "subsystem");
+	hostdev_ptree.put("hostdev.<xmlattr>.type", "pci");
+	hostdev_ptree.put("hostdev.<xmlattr>.managed", "yes");
+
+	boost::property_tree::ptree sub_pt;
+	sub_pt.put("address.<xmlattr>.domain", to_hex_string(pci_addr.domain, 4));
+	sub_pt.put("address.<xmlattr>.bus", to_hex_string(pci_addr.bus, 2));
+	sub_pt.put("address.<xmlattr>.slot", to_hex_string(pci_addr.slot, 2));
+	sub_pt.put("address.<xmlattr>.function", to_hex_string(pci_addr.function, 1));
+
+	hostdev_ptree.put_child("hostdev.source", sub_pt);
+
+	return write_xml_to_string(hostdev_ptree);
+}
+
 std::string Device::to_hostdev_xml() const
 {
 	using namespace boost::property_tree;
@@ -233,7 +259,7 @@ PCI_device_handler::PCI_device_handler() :
 {
 }
 
-void PCI_device_handler::attach(virDomainPtr domain, PCI_id pci_id)
+void PCI_device_handler::attach_by_id(virDomainPtr domain, PCI_id pci_id)
 {
 	// Get connection the domain belongs to.
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Get connection the domain belongs to.";
@@ -249,20 +275,31 @@ void PCI_device_handler::attach(virDomainPtr domain, PCI_id pci_id)
 	FASTLIB_LOG(pcidev_handler_log, trace) << "Try to attach a device until success or none is left.";
 	int ret = -1;
 	for (const auto &device : devices) {
+		if (attach_device(domain, device)) {
+			ret = 1;
+			// should we break here? only attach one device?
+			// Probably yes. Because we only have one device id but the cache might output more than one
+			// I mean. By ID is not a great idea anyway
+			break;
+		}
+	}
+	if (ret != 0)
+		throw std::runtime_error("No pci device could be attached");
+}
+
+bool PCI_device_handler::attach_device(virDomainPtr domain, std::shared_ptr<Device> device)
+{
 		FASTLIB_LOG(pcidev_handler_log, trace) << "Trying to attach device " << device->address.str();
 		auto hostdev_xml = device->to_hostdev_xml();
 		FASTLIB_LOG(pcidev_handler_log, trace) << "Hostdev xml:";
 		FASTLIB_LOG(pcidev_handler_log, trace) << hostdev_xml;
-		ret = virDomainAttachDevice(domain, hostdev_xml.c_str());
-		device->attached_hint = true;
-		if (ret == 0) {
+		if (virDomainAttachDevice(domain, hostdev_xml.c_str())) {
+			device->attached_hint = true;
 			FASTLIB_LOG(pcidev_handler_log, trace) << "Success attaching device.";
-			break;
+			return true;
 		}
 		FASTLIB_LOG(pcidev_handler_log, trace) << "No success attaching device.";
-	}
-	if (ret != 0)
-		throw std::runtime_error("No pci device could be attached");
+		return false;
 }
 
 std::unordered_map<PCI_id, size_t> PCI_device_handler::detach(virDomainPtr domain)
@@ -371,7 +408,7 @@ void Migrate_devices_guard::reattach()
 	for (auto &type_count : detached_types_counts) {
 		for (;type_count.second != 0; --type_count.second) {
 			FASTLIB_LOG(pcidev_handler_log, trace) << "Reattach device of type " << type_count.first.str();
-			pci_device_handler->attach(domain.get(), type_count.first);
+			pci_device_handler->attach_by_id(domain.get(), type_count.first);
 		}
 	}
 	time_measurement.tock("reattach-pci-devs" + tag_postfix);

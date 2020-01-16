@@ -633,10 +633,16 @@ void Libvirt_hypervisor::start(const Start &task, Time_measurement &time_measure
 	else
 		create(domain.get());
 	// Attach devices
-	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_ids.size() << " devices.";
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_addrs.size() << " devices by PCI address.";
+    for (auto &addr : task.pci_addrs) {
+		PCI_address pci_addr = PCI_address(0, addr.bus, addr.device, addr.funct);
+		auto dev = std::make_shared<Device>(pci_addr);
+		pci_device_handler->attach_device(domain.get(), dev);
+	}
+	FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach " << task.pci_ids.size() << " devices by vendor id";
 	for (auto &pci_id : task.pci_ids) {
 		FASTLIB_LOG(libvirt_hyp_log, trace) << "Attach device with PCI-ID " << pci_id.str();
-		pci_device_handler->attach(domain.get(), pci_id);
+		pci_device_handler->attach_by_id(domain.get(), pci_id);
 	}
 	if (task.ivshmem.is_valid()) {
 		Ivshmem_device ivshmem_device(task.ivshmem->id, task.ivshmem->size);
@@ -793,7 +799,7 @@ void init_destinations_capacities(const std::vector<std::string> &destinations, 
 	// If no overbooking allowed -> drop all full hosts
 	FASTLIB_LOG(libvirt_hyp_log, trace) << "overbooking:" << overbooking;
 	if (!overbooking) {
-		dest_caps.erase(std::remove_if(dest_caps.begin(), dest_caps.end(), 
+		dest_caps.erase(std::remove_if(dest_caps.begin(), dest_caps.end(),
 				[](const std::pair<std::string, int> &x){return x.second < 1;}),
 				dest_caps.end());
 	}
